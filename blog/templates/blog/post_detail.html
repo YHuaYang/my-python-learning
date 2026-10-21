@@ -1,0 +1,10 @@
+{% extends "blog/base.html" %}
+{% block title %}{{ post.title }} - 多于点线圈 blog{% endblock %}
+{% block content %}
+          <article>
+              <time>发布时间: {{ post.published_date }}</time>
+              <h2>{{ post.title }}</h2>
+              <p>{{ post.text|linebreaksbr }}</p>
+          </article>
+    <p><a href="{% url 'post_list' %}">←返回列表</a></p>
+{% endblock %}
