@@ -4,6 +4,7 @@
           <article>
               <time>发布时间: {{ post.published_date }}</time>
               <h2><a href="{% url 'post_detail' post.slug %}">{{ post.title }}</a></h2>
+              <p>{{ post.excerpt|default:post.text|truncatechars:100 }}</p>
           </article>
     {% endfor %}
 {% endblock %}
