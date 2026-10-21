@@ -8,10 +8,10 @@ def post_list(request):
     return render(request, 'blog/post_list.html', {"posts":posts})
 def about(request):
     return render(request, 'blog/about.html')
-def post_detail(request, pk):
+def post_detail(request, slug):
     post=get_object_or_404(
         Post,
-        pk=pk,
+        slug=slug,
         published_date__lte=timezone.now()
     )
     return render(request, 'blog/post_detail.html', {"post":post})
