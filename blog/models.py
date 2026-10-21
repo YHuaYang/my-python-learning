@@ -23,6 +23,20 @@ class Category(models.Model):
             self.slug = slugify(self.name, allow_unicode=True)
         super().save(*args, **kwargs)
 
+class Tag(models.Model):
+    name = models.CharField(max_length=30, unique=True)
+    slug = models.SlugField(max_length=30, unique=True, allow_unicode=True)
+
+    class Meta:
+        ordering = ['name',]
+    def __str__(self):
+        return self.name
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name, allow_unicode=True)
+        super().save(*args, **kwargs)
+
+
 
 class Post(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -30,6 +44,7 @@ class Post(models.Model):
     text = models.TextField()
     excerpt= models.TextField(blank=True,default='')
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True,blank=True,related_name='posts')
+    tags = models.ManyToManyField(Tag, blank=True,related_name='posts')
     slug = models.SlugField(max_length=200, unique=True,allow_unicode=True,blank=True,default='')
     created_date = models.DateTimeField(default=timezone.now)
     published_date = models.DateTimeField(blank=True, null=True)
