@@ -4,11 +4,32 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 
+class Category(models.Model):
+    TYPE_CHOICES = [
+        ('教程', '教程'),
+        ('日报', '日报'),
+        ('周报',"周报"),
+    ]
+    name = models.CharField(max_length=50, unique=True)
+    slug = models.SlugField(max_length=50, unique=True, allow_unicode=True)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='日报')
+    class Meta:
+        verbose_name_plural='categories'
+        ordering = ['name',]
+    def __str__(self):
+        return self.name
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name, allow_unicode=True)
+        super().save(*args, **kwargs)
+
+
 class Post(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     title = models.CharField(max_length=200)
     text = models.TextField()
     excerpt= models.TextField(blank=True,default='')
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True,blank=True,related_name='posts')
     slug = models.SlugField(max_length=200, unique=True,allow_unicode=True,blank=True,default='')
     created_date = models.DateTimeField(default=timezone.now)
     published_date = models.DateTimeField(blank=True, null=True)
