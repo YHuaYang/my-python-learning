@@ -7,6 +7,7 @@ __pycache__
 .env
 myvenv/
 venv/
+yangvenv/
 
 # Database
 db.sqlite3
@@ -30,3 +31,9 @@ $RECYCLE.BIN/
 .vscode/
 .history/
 *.code-workspace
+
+# JetBrains (PyCharm)：含本机绝对路径，不入库
+.idea/
+
+# AI 保存用（文档、笔记、杂项，不入库）
+ai保存用/
