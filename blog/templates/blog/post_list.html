@@ -1,10 +1,13 @@
 {% extends "blog/base.html" %}
 {% block content %}
-    {% for post in posts %}
-          <article>
-              <time>发布时间: {{ post.published_date }}</time>
-              <h2><a href="{% url 'post_detail' post.slug %}">{{ post.title }}</a></h2>
-              <p>{{ post.excerpt|default:post.text|truncatechars:100 }}</p>
-          </article>
-    {% endfor %}
+    {% include "blog/_posts.html" %}
+
+    {% if categories %}
+        <nav>
+            <h3>分类</h3>
+            {% for cat in categories %}
+                <a href="{% url 'category_posts' cat.slug %}">{{ cat.name }}</a>
+            {% endfor %}
+        </nav>
+    {% endif %}
 {% endblock %}
