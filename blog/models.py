@@ -10,6 +10,7 @@ Django 的其他部分都从这里派生：makemigrations 读它生成迁移，
 Admin 读它生成表单，ORM 读它生成 SQL。改模型等于改数据库结构。
 """
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
@@ -138,3 +139,112 @@ class Post(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class WeeklyProgress(models.Model):
+    # ISO 年。不是日历年：2026-12-31 可能属于 2027 年第 1 周，
+    # 所以录入时用 date.isocalendar()[0]，不要用 date.year
+    year = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(2000), MaxValueValidator(2100)]
+    )
+    # ISO 周，1-53，用 date.isocalendar()[1] 获取
+    week = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(53)]
+    )
+    # 一句话摘要，首页卡片用。正文截断不好控制，所以单独存一列短文本
+    summary = models.CharField(max_length=120, blank=True, default='')
+    # 详情页正文：小标题自己写（本周目标/完成项/总结/下周计划），
+    # 模型不强制四段都存在，否则每周会被逼着填满四个框
+    content = models.TextField(blank=True, default='')
+    published_date = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        # 同一组 (年, 周) 只能有一条，避免重复记录同一周
+        unique_together = [('year', 'week')]
+        ordering = ['-year', '-week']
+        # 默认会变成 "weekly progresss"（拼错），必须手动指定
+        verbose_name_plural = 'weekly progresses'
+
+    def __str__(self):
+        return f'{self.year} 年第 {self.week} 周'
+
+
+class Project(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=100, unique=True, allow_unicode=True, blank=True, default='')
+    summary = models.CharField(max_length=200, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    # 技术栈用逗号分隔的纯文本，不单独建表：
+    # 它只用于展示，没有筛选/统计需求，JSON 字段或关系表都属过度设计
+    tech_stack = models.CharField(max_length=200, blank=True, default='')
+    github_url = models.URLField(blank=True, default='')
+    demo_url = models.URLField(blank=True, default='')
+    # 手控排序：数字小的在前面。没有这个字段就只好按创建时间排，不受控
+    sort_order = models.IntegerField(default=0)
+    created_date = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['sort_order', '-created_date']
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        # 与 Post 相同的重名处理，但这里 name 已 unique，
+        # 所以重名会在校验阶段被拦，不用再加 -2 后缀逻辑
+        if not self.slug:
+            self.slug = slugify(self.name, allow_unicode=True)
+        super().save(*args, **kwargs)
+
+
+class DailySong(models.Model):
+    # 一天一首，所以日期唯一。用 DateField 而非 DateTimeField：
+    # 「哪一天的歌」不需要精确到秒
+    date = models.DateField(unique=True)
+    title = models.CharField(max_length=200)
+    artist = models.CharField(max_length=100)
+    cover_url = models.URLField(blank=True, default='')
+    comment = models.TextField(blank=True, default='')
+    # 平台官方播放器外链（网易云/QQ音乐等），不存音频文件
+    song_url = models.URLField(blank=True, default='')
+    # 官方 embed iframe 的 src，直接塞进模板的 iframe 里
+    embed_url = models.URLField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-date']
+
+    def __str__(self):
+        return f'{self.date} {self.title} - {self.artist}'
+
+
+class Profile(models.Model):
+    # 单例模型：全局只应该有一条记录。用 OneToOneField 指向用户 +
+    # save() 里强制 pk=1 双保险，避免后台误建第二条
+    nickname = models.CharField(max_length=50)
+    avatar_url = models.URLField(blank=True, default='')
+    tagline = models.CharField(max_length=120, blank=True, default='')
+    email = models.EmailField(blank=True, default='')
+    github_url = models.URLField(blank=True, default='')
+    social_links = models.TextField(
+        blank=True, default='',
+        help_text='一行一个，格式：平台名 URL',
+    )
+    updated_date = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = 'profiles'
+
+    def __str__(self):
+        return self.nickname
+
+    def save(self, *args, **kwargs):
+        # 强制主键为 1：无论新建多少次，都只会覆盖同一条记录
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        # 模板里用 Profile.load() 拿资料；不存在时返回未保存的空实例，
+        # 避免首页因为还没填资料就报错
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

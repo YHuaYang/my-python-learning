@@ -5,7 +5,7 @@ admin.py 配置 Django 后台的显示方式。
 ModelAdmin 里的每一项都是「展示层」配置，不影响数据存储和校验规则。
 """
 from django.contrib import admin
-from .models import Post,Category,Tag
+from .models import Post, Category, Tag, WeeklyProgress, Project, DailySong, Profile
 
 
 @admin.register(Post)
@@ -52,3 +52,75 @@ class TagAdmin(admin.ModelAdmin):
     list_display = ('name','slug')
     search_fields = ('name',)
     prepopulated_fields = {'slug':('name',)}
+
+
+@admin.register(WeeklyProgress)
+class WeeklyProgressAdmin(admin.ModelAdmin):
+    # __str__ 会渲染成「2026 年第 43 周」
+    list_display = ('__str__', 'summary_preview', 'published_date')
+    list_filter = ('year',)
+    search_fields = ('summary', 'content')
+    ordering = ('-year', '-week')
+    date_hierarchy = 'published_date'
+    fieldsets = (
+        ('周期', {
+            'fields': ('year', 'week'),
+            # 组顶部的说明文字，提醒自己 ISO 周的两个坑
+            'description': 'ISO 标准：用 date(2026,10,25).isocalendar() 确认，'
+                           '注意 ISO 年不等于日历年',
+        }),
+        ('内容', {
+            'fields': ('summary', 'content'),
+        }),
+        ('发布', {
+            'fields': ('published_date',),
+        }),
+    )
+
+    @admin.display(description='摘要')
+    def summary_preview(self, obj):
+        return obj.summary[:30] or '（无摘要）'
+
+
+@admin.register(Project)
+class ProjectAdmin(admin.ModelAdmin):
+    list_display = ('name', 'slug', 'summary_preview', 'sort_order', 'created_date')
+    search_fields = ('name', 'summary', 'description')
+    prepopulated_fields = {'slug': ('name',)}
+    ordering = ('sort_order', '-created_date')
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('name', 'slug', 'summary', 'tech_stack', 'sort_order'),
+        }),
+        ('详细内容', {
+            'fields': ('description',),
+        }),
+        ('链接', {
+            'fields': ('github_url', 'demo_url'),
+        }),
+    )
+
+    @admin.display(description='简介')
+    def summary_preview(self, obj):
+        return obj.summary[:30] or '（无简介）'
+
+
+@admin.register(DailySong)
+class DailySongAdmin(admin.ModelAdmin):
+    list_display = ('date', 'title', 'artist')
+    list_filter = ('artist',)
+    search_fields = ('title', 'artist', 'comment')
+    date_hierarchy = 'date'
+    ordering = ('-date',)
+
+
+@admin.register(Profile)
+class ProfileAdmin(admin.ModelAdmin):
+    list_display = ('nickname', 'tagline', 'email', 'updated_date')
+
+    def has_add_permission(self, request):
+        # 单例模型：已经存在一条时不再允许「新增」，
+        # 否则后台会出现两个入口指向同一条记录，容易误解
+        if Profile.objects.exists():
+            return False
+        return super().has_add_permission(request)
