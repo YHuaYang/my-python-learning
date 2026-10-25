@@ -12,7 +12,7 @@ from .models import Post,Category,Tag
 class PostAdmin(admin.ModelAdmin):
        # 列表页显示的列。写字段名时 Django 会显示该值的 __str__，
        # 所以 'author' 显示的是用户名（User.__str__ 返回 username）
-       list_display = ('title', 'slug', 'author', 'category','published_date',)
+       list_display = ('title', 'slug', 'author', 'category','published_date','views')
        # 右侧筛选栏。多对多和多对一字段会自动展开成可选值
        list_filter = ('category','published_date', 'author')
        # 顶部搜索框搜哪些字段。只能搜文本类字段，不能搜外键本身

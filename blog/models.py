@@ -71,6 +71,18 @@ class Tag(models.Model):
 
 
 class Post(models.Model):
+
+    STATUS_CHOICES = [
+        ('draft', '草稿'),
+        ('published', '已发布'),
+        ('archived', '归档'),
+    ]
+    # 决定前台是否可见的唯一字段：只有 published 会被查询出来
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default='draft',
+    )
     # settings.AUTH_USER_MODEL 是字符串形式的用户模型引用（默认 'auth.User'）。
     # 不直接 import User，是为了以后换成自定义用户模型时不用改代码。
     # CASCADE：作者被删除时，他名下的文章一并删除。
@@ -95,13 +107,16 @@ class Post(models.Model):
     #   default=''    —— 初始值为空字符串，让 save() 里能判断「未填写」
     slug = models.SlugField(max_length=200, unique=True,allow_unicode=True,blank=True,default='')
     created_date = models.DateTimeField(default=timezone.now)
-    # 为 NULL 表示草稿；有值且早于当前时间才在前台显示。
-    # 这是「发布状态」的隐式表达，以后若加 status 字段可取代它。
+    # published_date 只记录发布时刻，用于显示和排序；
+    # 前台是否可见由上面的 status 决定。
     published_date = models.DateTimeField(blank=True, null=True)
+    views = models.PositiveIntegerField(default=0, editable=False)
 
     def publish(self):
-        # 把草稿转成已发布：写入当前时间并保存（save 会自动补 slug）
-        self.published_date = timezone.now()
+        # 把草稿转成已发布：改状态、补发布时间（有就不覆盖），再保存
+        self.status = 'published'
+        if not self.published_date:
+            self.published_date = timezone.now()
         self.save()
 
     def save(self, *args, **kwargs):

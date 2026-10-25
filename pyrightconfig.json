@@ -1,0 +1,12 @@
+{
+  "venvPath": ".",
+  "venv": "yangvenv",
+  "pythonVersion": "3.14",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "warning",
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "yangvenv"
+  ]
+}

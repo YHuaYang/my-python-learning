@@ -10,15 +10,15 @@ views.py 处理用户请求：查数据 → 选模板 → 返回 HTML。
 筛选条件「列表里过滤了、详情里忘了过滤」是内容站最常见的越权漏洞。
 """
 from django.shortcuts import render,get_object_or_404
-from django.utils import timezone
 from .models import Post,Category,Tag
+from django.db.models import F
 
 
 def post_list(request):
     """首页：已发布文章列表（新→旧）+ 分类导航。"""
     # 首页要看两样东西，所以查两次不同的表：
     # posts 用于正文列表，categories 用于底部的分类入口
-    posts=Post.objects.filter(published_date__lte=timezone.now()).order_by('-published_date')
+    posts=Post.objects.filter(status='published').order_by('-published_date')
     categories = Category.objects.all()
     return render(request,'blog/post_list.html',{"posts":posts,"categories":categories,})
 
@@ -35,12 +35,10 @@ def post_detail(request, slug):
     # get() 找不到会抛 DoesNotExist → 500 服务器错误；
     # get_object_or_404 会自动转成 404 页面。
     # 「文章不存在」是正常情况，不该表现为代码出错。
-    post=get_object_or_404(
-        Post,
-        slug=slug,
-        published_date__lte=timezone.now()   # 草稿不可访问，防止靠猜 slug 越权
-    )
-    return render(request, 'blog/post_detail.html', {"post":post})
+    post = get_object_or_404(Post, slug=slug, status='published')
+    Post.objects.filter(pk=post.pk).update(views=F('views') + 1)
+    post.refresh_from_db()
+    return render(request, 'blog/post_detail.html', {"post": post})
 
 
 def category_posts(request, slug):
@@ -51,7 +49,7 @@ def category_posts(request, slug):
     # 等价于 Post.objects.filter(category=category)，生成的 SQL 相同。
     # 注意仍然要自己加发布时间过滤，反向查询不会自动带上去。
     posts = category.posts.filter(
-        published_date__lte=timezone.now()
+        status='published'
     ).order_by('-published_date')
     # title 传给模板做页面标题，这样 post_filter.html 不用判断
     # 「当前是分类页还是标签页」，两个视图共用同一个模板
@@ -69,7 +67,7 @@ def tag_posts(request, slug):
     """
     tag = get_object_or_404(Tag, slug=slug)
     posts = tag.posts.filter(
-        published_date__lte=timezone.now()
+        status='published'
     ).order_by('-published_date')
     return render(request, 'blog/post_filter.html', {
         'title': f'标签：{tag.name}',
