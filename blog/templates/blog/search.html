@@ -1,0 +1,39 @@
+{% extends "blog/base.html" %}
+{% block title %}搜索 - 多于点线圈 blog{% endblock %}
+{% block content %}
+    <h1 class="text-2xl font-bold">搜索</h1>
+
+    <form method="get" class="mt-4 max-w-2xl">
+        <div class="flex gap-2">
+            <div class="flex-1">{{ form.q }}</div>
+            <button type="submit"
+                    class="shrink-0 rounded bg-brand px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark">
+                搜索
+            </button>
+        </div>
+        {% if form.q.errors %}
+            <p class="mt-2 text-sm text-red-600">{{ form.q.errors|join:" " }}</p>
+        {% endif %}
+    </form>
+
+    {% if keyword %}
+        <p class="mt-8 text-sm text-neutral-500">
+            「<span class="font-medium text-neutral-700">{{ keyword }}</span>」
+            {% if posts %}共找到 {{ posts|length }} 篇{% else %}没有找到相关文章{% endif %}
+        </p>
+
+        {% if posts %}
+            <div class="mt-4">
+                {% include "blog/_posts.html" %}
+            </div>
+        {% else %}
+            <div class="mt-6 rounded-lg border border-dashed border-neutral-300 p-8 text-center text-neutral-500">
+                <p>换个关键词试试，比如文章标题里的词。</p>
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="mt-8 rounded-lg border border-dashed border-neutral-300 p-8 text-center text-neutral-500">
+            <p>输入关键词搜索文章的标题和正文。</p>
+        </div>
+    {% endif %}
+{% endblock %}

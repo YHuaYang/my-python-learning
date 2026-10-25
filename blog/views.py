@@ -11,7 +11,8 @@ views.py 处理用户请求：查数据 → 选模板 → 返回 HTML。
 """
 from django.shortcuts import render,get_object_or_404
 from .models import Post,Category,Tag
-from django.db.models import F
+from .forms import SearchForm
+from django.db.models import F,Q
 
 
 def post_list(request):
@@ -72,4 +73,24 @@ def tag_posts(request, slug):
     return render(request, 'blog/post_filter.html', {
         'title': f'标签：{tag.name}',
         'posts': posts,
+    })
+
+
+def search(request):
+    form = SearchForm(request.GET or None)
+    posts = Post.objects.none()  # 默认空 QuerySet
+    keyword = ''
+
+    if form.is_valid():
+        keyword = form.cleaned_data['q'].strip()
+        if keyword:
+            posts = Post.objects.filter(
+                Q(title__icontains=keyword) | Q(text__icontains=keyword),
+                status='published',
+            ).order_by('-published_date')
+
+    return render(request, 'blog/search.html', {
+        'form': form,
+        'posts': posts,
+        'keyword': keyword,
     })
