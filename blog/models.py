@@ -121,6 +121,10 @@ class Post(models.Model):
         self.save()
 
     def save(self, *args, **kwargs):
+        # 强制 status 与 published_date 一致：状态是 published 却没发布时间时
+        # 自动补当前时间。否则前台会渲染出 "None"（曾出现过这种数据不一致）
+        if self.status == 'published' and not self.published_date:
+            self.published_date = timezone.now()
         if not self.slug:
             base = slugify(self.title, allow_unicode=True)
             slug = base

@@ -1,7 +1,11 @@
 {% for post in posts %}
     <article class="border-b border-neutral-200 pb-6 mb-6 last:border-0 last:pb-0 last:mb-0">
         <div class="flex items-center gap-3">
-            <time class="text-sm text-neutral-500">{{ post.published_date }}</time>
+            {# published_date 为空时不渲染时间元素，避免页面上出现 None；
+               模型 save() 已强制 published 必须有时间，这里只是兼底 #}
+            {% if post.published_date %}
+                <time class="text-sm text-neutral-500">{{ post.published_date }}</time>
+            {% endif %}
             {# 列表页只展示计数，不增加（只有详情页会 update） #}
             <span class="text-xs text-neutral-400">{{ post.views }} 阅读</span>
         </div>
