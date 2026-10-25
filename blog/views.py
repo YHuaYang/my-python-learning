@@ -13,15 +13,24 @@ from django.shortcuts import render,get_object_or_404
 from .models import Post,Category,Tag
 from .forms import SearchForm
 from django.db.models import F,Q
+from django.core.paginator import Paginator
 
 
 def post_list(request):
-    """首页：已发布文章列表（新→旧）+ 分类导航。"""
-    # 首页要看两样东西，所以查两次不同的表：
-    # posts 用于正文列表，categories 用于底部的分类入口
-    posts=Post.objects.filter(status='published').order_by('-published_date')
+    """首页：已发布文章列表（新→旧），分页显示。"""
+    posts = Post.objects.filter(status='published').order_by('-published_date')
     categories = Category.objects.all()
-    return render(request,'blog/post_list.html',{"posts":posts,"categories":categories,})
+
+    # 每页 5 条。用 get_page 而不是 page：page() 在页码非法时抛异常导致 500，
+    # get_page() 会把非法页码自动修正为第 1 页或最后一页
+    paginator = Paginator(posts, 5)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'blog/post_list.html', {
+        'posts': page_obj,
+        'page_obj': page_obj,
+        'categories': categories,
+    })
 
 
 def about(request):
@@ -46,17 +55,20 @@ def category_posts(request, slug):
     """某个分类下的已发布文章。"""
     # 先取分类，分类不存在则 404（而不是显示一个空列表）
     category = get_object_or_404(Category, slug=slug)
-    # category.posts 是 related_name='posts' 定义的反向查询，
-    # 等价于 Post.objects.filter(category=category)，生成的 SQL 相同。
-    # 注意仍然要自己加发布时间过滤，反向查询不会自动带上去。
-    posts = category.posts.filter(
-        status='published'
+    # 用 Post.objects.filter(category=category) 而不是 category.posts：
+    # 两者 SQL 完全相同，但后者是 related_name 动态生成的反向属性，
+    # 静态类型检查器看不到它，写成正向查询能消除误报且意图更明确
+    posts = Post.objects.filter(
+        category=category,
+        status='published',
     ).order_by('-published_date')
     # title 传给模板做页面标题，这样 post_filter.html 不用判断
     # 「当前是分类页还是标签页」，两个视图共用同一个模板
+    page_obj = _paginate(request, posts)
     return render(request, 'blog/post_filter.html', {
         'title': f'分类：{category.name}',
-        'posts': posts,
+        'posts': page_obj,
+        'page_obj': page_obj,
     })
 
 
@@ -67,12 +79,17 @@ def tag_posts(request, slug):
     可读性反而不如两个各自 5 行的独立函数。
     """
     tag = get_object_or_404(Tag, slug=slug)
-    posts = tag.posts.filter(
-        status='published'
+    # 同样改用正向查询：Post.objects.filter(tags=tag) 与 tag.posts 等价，
+    # 但静态检查器能识别前者，避免 related_name 造成的类型报错
+    posts = Post.objects.filter(
+        tags=tag,
+        status='published',
     ).order_by('-published_date')
+    page_obj = _paginate(request, posts)
     return render(request, 'blog/post_filter.html', {
         'title': f'标签：{tag.name}',
-        'posts': posts,
+        'posts': page_obj,
+        'page_obj': page_obj,
     })
 
 
@@ -94,3 +111,9 @@ def search(request):
         'posts': posts,
         'keyword': keyword,
     })
+
+
+def _paginate(request, queryset, per_page=5):
+    """对 queryset 分页，返回 page_obj。三个列表视图共用。"""
+    paginator = Paginator(queryset, per_page)
+    return paginator.get_page(request.GET.get('page'))

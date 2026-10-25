@@ -1,0 +1,21 @@
+{% if page_obj.has_other_pages %}
+    <nav class="mt-10 flex items-center justify-between border-t border-neutral-200 pt-6 text-sm">
+        <div class="flex-1">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}"
+                   class="text-brand hover:underline">&larr; 上一页</a>
+            {% endif %}
+        </div>
+
+        <span class="text-neutral-500">
+            第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页
+        </span>
+
+        <div class="flex-1 text-right">
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}"
+                   class="text-brand hover:underline">下一页 &rarr;</a>
+            {% endif %}
+        </div>
+    </nav>
+{% endif %}

@@ -1,6 +1,7 @@
 {% extends "blog/base.html" %}
 {% block content %}
     {% include "blog/_posts.html" %}
+    {% include "blog/_pagination.html" %}
 
     {% if categories %}
         <nav class="mt-12 border-t border-neutral-200 pt-6">
