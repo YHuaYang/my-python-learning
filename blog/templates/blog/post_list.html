@@ -3,11 +3,16 @@
     {% include "blog/_posts.html" %}
 
     {% if categories %}
-        <nav>
-            <h3>分类</h3>
-            {% for cat in categories %}
-                <a href="{% url 'category_posts' cat.slug %}">{{ cat.name }}</a>
-            {% endfor %}
+        <nav class="mt-12 border-t border-neutral-200 pt-6">
+            <h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">分类</h3>
+            <div class="flex flex-wrap gap-2">
+                {% for cat in categories %}
+                    <a href="{% url 'category_posts' cat.slug %}"
+                       class="rounded-full border border-neutral-300 px-3 py-1 text-sm text-neutral-600 transition-colors hover:border-brand hover:text-brand">
+                        {{ cat.name }}
+                    </a>
+                {% endfor %}
+            </div>
         </nav>
     {% endif %}
 {% endblock %}

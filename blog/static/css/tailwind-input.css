@@ -1,0 +1,24 @@
+/* Tailwind CSS v4 入口文件（源文件，进 git）
+ *
+ * 构建：npm run css:build   一次性生成压缩后的 tailwind.css
+ * 开发：npm run css:watch   监听模板变化自动重建
+ *
+ * 产物 blog/static/css/tailwind.css 不进 git，见 .gitignore
+ */
+
+@import "tailwindcss";
+
+/* 告诉 Tailwind 去哪里扫描用到的类名。
+ * Django 模板不在默认扫描范围内，不指定的话生成的 CSS 会是空的。 */
+@source "../../templates";
+
+/* 设计令牌：定义后自动生成 bg-brand / text-brand / border-brand 等工具类，
+ * 对应规划文档里「中性底色 + 单一主色」的配色要求 */
+@theme {
+    --color-brand: #c25100;
+    --color-brand-dark: #a34400;
+
+    --font-sans: system-ui, -apple-system, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, monospace;
+}

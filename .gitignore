@@ -37,3 +37,7 @@ $RECYCLE.BIN/
 
 # AI 保存用（文档、笔记、杂项，不入库）
 ai保存用/
+
+# Node / Tailwind 构建
+node_modules/
+blog/static/css/tailwind.css

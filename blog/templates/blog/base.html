@@ -1,29 +1,32 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="scroll-smooth">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="{% static 'css/tailwind.css' %}">
         <link rel="stylesheet" href="{% static 'css/blog.css' %}">
         <title>{% block title %}多于点线圈 blog{% endblock %}</title>
     </head>
-    <body>
-        <header>
-            <h1>
-                <a href="{% url 'post_list' %}">多于点线圈的blog</a>
-            </h1>
-            <nav>
-                <a href="{% url 'post_list' %}">首页</a>
-                <a href="{% url 'about' %}">关于</a>
-            </nav>
+    <body class="min-h-screen flex flex-col bg-white text-neutral-800 font-sans antialiased">
+        <header class="sticky top-0 z-10 border-b border-neutral-200 bg-white/95 backdrop-blur">
+            <div class="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <a href="{% url 'post_list' %}" class="text-lg font-semibold text-brand hover:text-brand-dark">
+                    多于点线圈
+                </a>
+                <nav class="flex items-center gap-1 text-sm">
+                    <a href="{% url 'post_list' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100">首页</a>
+                    <a href="{% url 'about' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100">关于</a>
+                </nav>
+            </div>
         </header>
 
-        <main>
-        {% block content %}{% endblock %}
+        <main class="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
+            {% block content %}{% endblock %}
         </main>
 
-        <footer>
-        @2026 多于点线圈
+        <footer class="border-t border-neutral-200 py-6 text-center text-sm text-neutral-500">
+            &copy; 2026 多于点线圈
         </footer>
     </body>
 </html>

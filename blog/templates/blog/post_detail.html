@@ -1,10 +1,13 @@
 {% extends "blog/base.html" %}
 {% block title %}{{ post.title }} - 多于点线圈 blog{% endblock %}
 {% block content %}
-    <article>
-        <time>发布时间: {{ post.published_date }}</time>
-        <h2>{{ post.title }}</h2>
-        <p>{{ post.text|linebreaksbr }}</p>
+    <article class="max-w-3xl">
+        <time class="text-sm text-neutral-500">{{ post.published_date }}</time>
+        <h1 class="mt-1 text-3xl font-bold leading-tight">{{ post.title }}</h1>
+        <div class="mt-6 leading-loose text-neutral-700">{{ post.text|linebreaksbr }}</div>
     </article>
-    <p><a href="{% url 'post_list' %}">&larr; 返回列表</a></p>
+
+    <p class="mt-12">
+        <a href="{% url 'post_list' %}" class="text-sm text-brand hover:underline">&larr; 返回列表</a>
+    </p>
 {% endblock %}
