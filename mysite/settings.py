@@ -37,6 +37,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
+    # sitemap 视图依赖这个 app 提供的 sitemap.xml 模板，
+    # 不注册会报 TemplateDoesNotExist: sitemap.xml
+    'django.contrib.sitemaps',
     'blog',
 ]
 
@@ -110,6 +114,10 @@ TIME_ZONE = 'Asia/Shanghai'
 USE_I18N = True
 
 USE_TZ = True
+
+# django.contrib.sites：sitemap 用它拼绝对 URL。
+# 只有一个站点，固定用 SITE_ID = 1，对应 admin 里 Sites 那一条记录。
+SITE_ID = 1
 
 
 # Static files (CSS, JavaScript, Images)

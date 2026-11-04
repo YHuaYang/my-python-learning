@@ -14,6 +14,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+from django.urls import reverse
 
 
 class Category(models.Model):
@@ -140,6 +141,10 @@ class Post(models.Model):
             self.slug = slug
         # 必须调用父类，否则数据不会写进数据库（和 Category.save 同理）
         super().save(*args, **kwargs)
+    def get_absolute_url(self):
+        # name 必须和 blog/urls.py 里完全一致（下划线，不是连字符），
+        # 否则抛 NoReverseMatch，sitemap 与 Admin 的「查看」按钮都会挂
+        return reverse('post_detail', kwargs={'slug': self.slug})
 
     def __str__(self):
         return self.title

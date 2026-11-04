@@ -2,7 +2,15 @@
 urls.py 是路由表，它决定了去views.py调用哪些函数去处理
 """
 from django.urls import path
+from django.contrib.sitemaps.views import sitemap
+from .feeds import LatestPostsFeed
+from .sitemaps import PostSitemap,StaticViewSitemap
 from . import views
+
+sitemaps={
+    'posts': PostSitemap,
+    'static': StaticViewSitemap,
+}
 
 urlpatterns = [
     # path('',...)的空字符串（''）代表根目录
@@ -14,4 +22,6 @@ urlpatterns = [
     path('tag/<str:slug>/', views.tag_posts, name='tag_posts'),
     path('category/<str:slug>/', views.category_posts, name='category_posts'),
     path('search/', views.search, name='search'),
+    path('rss/',LatestPostsFeed(),name='rss'),
+    path('sitemap.xml',sitemap,{'sitemaps':sitemaps},name='sitemap'),
 ]
