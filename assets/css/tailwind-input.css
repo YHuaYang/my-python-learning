@@ -1,16 +1,20 @@
 /* Tailwind CSS v4 入口文件（源文件，进 git）
  *
+ * 位置：assets/css/ —— 这是源码而不是静态资源，所以不放在
+ * blog/static/ 下。放在 static/ 里会被 collectstatic 当成要发布的
+ * 文件，而它里面的 @import "tailwindcss" 是构建指令而非真实文件引用，
+ * 会导致 CompressedManifestStaticFilesStorage 报 MissingFileError。
+ *
  * 构建：npm run css:build   一次性生成压缩后的 tailwind.css
  * 开发：npm run css:watch   监听模板变化自动重建
- *
- * 产物 blog/static/css/tailwind.css 不进 git，见 .gitignore
  */
 
 @import "tailwindcss";
 
 /* 告诉 Tailwind 去哪里扫描用到的类名。
- * Django 模板不在默认扫描范围内，不指定的话生成的 CSS 会是空的。 */
-@source "../../templates";
+ * Django 模板不在默认扫描范围内，不指定的话生成的 CSS 会是空的。
+ * 路径相对本文件（assets/css/）计算：../../blog/templates */
+@source "../../blog/templates";
 
 /* 设计令牌：定义后自动生成 bg-brand / text-brand / border-brand 等工具类，
  * 对应规划文档里「中性底色 + 单一主色」的配色要求 */

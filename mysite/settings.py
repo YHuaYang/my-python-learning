@@ -68,6 +68,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # WhiteNoise 必须紧跟在 SecurityMiddleware 之后、其他中间件之前：
+    # 它要在请求到达视图前直接返回静态文件，避免不必要的 Python 处理
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -146,9 +149,52 @@ SITE_ID = 1
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+# collectstatic 的输出目录。生产环境由 WhiteNoise 从这里读文件，
+# 不经过 Django 的视图；开发时（DEBUG=True）runserver 直接读各 app 的 static/，
+# 所以本地看不到这个目录也不影响开发
 STATIC_ROOT = BASE_DIR / 'static'
+
+# WhiteNoise 的存储后端：collectstatic 时自动生成 .gz / .br 压缩副本，
+# 并给文件名加内容哈希（内容变了文件名就变，可设长期缓存）
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# 生产环境安全配置：只在 DEBUG=False 且启用了 HTTPS 时才生效。
+#
+# 为什么需要单独的环境变量开关：本地用 DEBUG=False 模拟生产时没有 HTTPS，
+# 一旦开启 SECURE_SSL_REDIRECT，所有请求会被 301 到 https:// 而连不上。
+# 真正的生产环境由 Nginx 或云平台处理证书，设 USE_HTTPS=True 即可。
+USE_HTTPS = os.environ.get('USE_HTTPS', 'False') == 'True'
+
+if not DEBUG:
+    # 阻止浏览器猜 Content-Type，降低 XSS 风险；本地无 HTTPS 也安全，所以无条件开
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
+if not DEBUG and USE_HTTPS:
+    # 告诉 Django 它跑在反向代理的 HTTPS 后面，据此判断请求是否安全
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    # 把 HTTP 请求永久重定向到 HTTPS
+    SECURE_SSL_REDIRECT = True
+    # session 与 csrf cookie 只通过 HTTPS 传输，防网络抳动会话
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # HSTS：告诉浏览器一段时间内只走 HTTPS。
+    # 开始值要小（如 3600），确认全站 HTTPS 没问题后再逐步调大，
+    # 设错了会让域名在 max-age 期间无法用 HTTP 访问，且不可逆
+    SECURE_HSTS_SECONDS = 3600
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    # 阻止浏览器猜 Content-Type，降低 XSS 风险
+    SECURE_CONTENT_TYPE_NOSNIFF = True

@@ -4,8 +4,8 @@
   "private": true,
   "description": "个人博客与每日新闻聚合系统 - 前端构建",
   "scripts": {
-    "css:build": "tailwindcss -i blog/static/css/tailwind-input.css -o blog/static/css/tailwind.css --minify",
-    "css:watch": "tailwindcss -i blog/static/css/tailwind-input.css -o blog/static/css/tailwind.css --watch"
+    "css:build": "tailwindcss -i assets/css/tailwind-input.css -o blog/static/css/tailwind.css --minify",
+    "css:watch": "tailwindcss -i assets/css/tailwind-input.css -o blog/static/css/tailwind.css --watch"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",
