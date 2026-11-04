@@ -154,14 +154,23 @@ STATIC_URL = 'static/'
 # 所以本地看不到这个目录也不影响开发
 STATIC_ROOT = BASE_DIR / 'static'
 
-# WhiteNoise 的存储后端：collectstatic 时自动生成 .gz / .br 压缩副本，
+# WhiteNoise 的存储后端：collectstatic 时自动生成 .gz 压缩副本，
 # 并给文件名加内容哈希（内容变了文件名就变，可设长期缓存）
+#
+# 为什么加 if DEBUG：CompressedManifestStaticFilesStorage 要求每个静态文件
+# 都在 staticfiles.json 里有记录，否则 {% static %} 直接抛 ValueError。
+# 开发时不会跑 collectstatic，只要新增一个 JS/CSS 就会全站报错。
+# 所以开发与测试用默认 storage，只有 DEBUG=False 时才启用 manifest。
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
     'staticfiles': {
-        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+        'BACKEND': (
+            'django.contrib.staticfiles.storage.StaticFilesStorage'
+            if DEBUG
+            else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+        ),
     },
 }
 

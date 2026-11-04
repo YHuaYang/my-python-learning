@@ -1,5 +1,5 @@
 {% if page_obj.has_other_pages %}
-    <nav class="mt-10 flex items-center justify-between border-t border-neutral-200 pt-6 text-sm">
+    <nav class="mt-10 flex items-center justify-between border-t border-neutral-200 pt-6 text-sm dark:border-neutral-700">
         <div class="flex-1">
             {% if page_obj.has_previous %}
                 <a href="?page={{ page_obj.previous_page_number }}"
@@ -7,7 +7,7 @@
             {% endif %}
         </div>
 
-        <span class="text-neutral-500">
+        <span class="text-neutral-500 dark:text-neutral-400">
             第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页
         </span>
 

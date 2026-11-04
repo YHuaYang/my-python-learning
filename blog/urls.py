@@ -22,6 +22,18 @@ urlpatterns = [
     path('tag/<str:slug>/', views.tag_posts, name='tag_posts'),
     path('category/<str:slug>/', views.category_posts, name='category_posts'),
     path('search/', views.search, name='search'),
+
+    # 项目：固定路径与通配路径要注意顺序，固定路径必须在前，
+    # 否则 projects/ 会被 projects/<str:slug>/ 抢走
+    path('projects/', views.projects, name='projects'),
+    path('projects/<str:slug>/', views.project_detail, name='project_detail'),
+
+    # 进度：用「年 + 周」定位，比主键可读，且对 SEO 友好
+    path('progress/', views.progress_list, name='progress_list'),
+    path('progress/<int:year>-w<int:week>/', views.progress_detail, name='progress_detail'),
+
+    path('songs/', views.song_list, name='song_list'),
+
     path('rss/',LatestPostsFeed(),name='rss'),
     path('sitemap.xml',sitemap,{'sitemaps':sitemaps},name='sitemap'),
 ]

@@ -1,0 +1,37 @@
+{% extends "blog/base.html" %}
+{% load markdownify %}
+{% block title %}{{ project.name }} - 多于点线圈 blog{% endblock %}
+{% block content %}
+    <article class="max-w-3xl">
+        <h1 class="text-3xl font-bold leading-tight">{{ project.name }}</h1>
+
+        {% if project.summary %}
+            <p class="mt-3 text-lg leading-relaxed text-neutral-600 dark:text-neutral-400">{{ project.summary }}</p>
+        {% endif %}
+
+        {% if project.tech_stack %}
+            <p class="mt-4 text-sm text-neutral-500 dark:text-neutral-400">技术栈：{{ project.tech_stack }}</p>
+        {% endif %}
+
+        {% if project.github_url or project.demo_url %}
+            <div class="mt-5 flex flex-wrap gap-4 text-sm">
+                {% if project.github_url %}
+                    <a href="{{ project.github_url }}" target="_blank" rel="noopener noreferrer"
+                       class="text-brand hover:underline">GitHub 仓库 &rarr;</a>
+                {% endif %}
+                {% if project.demo_url %}
+                    <a href="{{ project.demo_url }}" target="_blank" rel="noopener noreferrer"
+                       class="text-brand hover:underline">在线演示 &rarr;</a>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {% if project.description %}
+            <div class="prose-content mt-8 leading-loose text-neutral-700 dark:text-neutral-300">{{ project.description|markdownify }}</div>
+        {% endif %}
+    </article>
+
+    <p class="mt-12">
+        <a href="{% url 'projects' %}" class="text-sm text-brand hover:underline">&larr; 返回项目列表</a>
+    </p>
+{% endblock %}

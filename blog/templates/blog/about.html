@@ -3,6 +3,44 @@
 {% block content %}
     <div class="max-w-3xl">
         <h1 class="text-2xl font-bold">关于我</h1>
-        <p class="mt-4 leading-loose text-neutral-700">我是一名网工专业的学生</p>
+
+        {% if profile.nickname %}
+            <div class="mt-6 flex items-start gap-5">
+                {% if profile.avatar_url %}
+                    <img src="{{ profile.avatar_url }}" alt="{{ profile.nickname }}"
+                         class="h-20 w-20 shrink-0 rounded-full object-cover">
+                {% endif %}
+                <div class="min-w-0">
+                    <p class="text-lg font-semibold">{{ profile.nickname }}</p>
+                    {% if profile.tagline %}
+                        <p class="mt-1 text-neutral-600 dark:text-neutral-400">{{ profile.tagline }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="mt-6 space-y-2 leading-loose text-neutral-700 dark:text-neutral-300">
+            <p>我是一名网工专业的学生。</p>
+        </div>
+
+        {% if profile.email or profile.github_url or profile.social_links %}
+            <div class="mt-8 border-t border-neutral-200 pt-6 dark:border-neutral-700">
+                <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-400">联系方式</h2>
+                <ul class="mt-3 space-y-1.5 text-sm">
+                    {% if profile.email %}
+                        <li>邮箱：<a href="mailto:{{ profile.email }}" class="text-brand hover:underline">{{ profile.email }}</a></li>
+                    {% endif %}
+                    {% if profile.github_url %}
+                        <li>GitHub：<a href="{{ profile.github_url }}" target="_blank" rel="noopener noreferrer"
+                                     class="text-brand hover:underline">{{ profile.github_url }}</a></li>
+                    {% endif %}
+                    {% for line in profile.social_links.splitlines %}
+                        {% if line %}
+                            <li>{{ line }}</li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
     </div>
 {% endblock %}

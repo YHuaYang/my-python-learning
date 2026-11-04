@@ -27,6 +27,13 @@
     --font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, monospace;
 }
 
+/* 暗色模式用 class 策略：<html class="dark"> 时才生效。
+ *
+ * 为什么不用默认的 media 策略：媒体策略只能跟随系统设置，
+ * 用户无法在页面上切换。用 class 策略后由 JS 往 html 上加 dark 类，
+ * 切换逻辑和偏好存储都在前端完成，后端不用参与。 */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Markdown 正文排版。
  * Tailwind 的 preflight 会把 h2/ul/table 等标签的默认样式全部清零，
  * 所以 Markdown 渲染出来的标题、列表、引用、代码块都需要在这里补回。 */
@@ -36,15 +43,15 @@
     }
 
     .prose-content h2 {
-        @apply mt-8 mb-3 text-2xl font-bold leading-snug text-neutral-900;
+        @apply mt-8 mb-3 text-2xl font-bold leading-snug text-neutral-900 dark:text-neutral-100;
     }
 
     .prose-content h3 {
-        @apply mt-6 mb-2 text-xl font-semibold leading-snug text-neutral-900;
+        @apply mt-6 mb-2 text-xl font-semibold leading-snug text-neutral-900 dark:text-neutral-100;
     }
 
     .prose-content h4 {
-        @apply mt-5 mb-2 text-base font-semibold text-neutral-900;
+        @apply mt-5 mb-2 text-base font-semibold text-neutral-900 dark:text-neutral-100;
     }
 
     .prose-content p {
@@ -60,7 +67,7 @@
     }
 
     .prose-content blockquote {
-        @apply my-4 border-l-4 border-neutral-300 pl-4 text-neutral-600 italic;
+        @apply my-4 border-l-4 border-neutral-300 pl-4 text-neutral-600 italic dark:border-neutral-600 dark:text-neutral-400;
     }
 
     .prose-content a {
@@ -68,7 +75,7 @@
     }
 
     .prose-content code {
-        @apply rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[0.9em] text-neutral-800;
+        @apply rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[0.9em] text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200;
     }
 
     /* 代码块内部不要双重背景与内边距，
@@ -90,15 +97,15 @@
     }
 
     .prose-content th {
-        @apply border-b-2 border-neutral-300 px-3 py-2 text-left font-semibold;
+        @apply border-b-2 border-neutral-300 px-3 py-2 text-left font-semibold dark:border-neutral-600;
     }
 
     .prose-content td {
-        @apply border-b border-neutral-200 px-3 py-2;
+        @apply border-b border-neutral-200 px-3 py-2 dark:border-neutral-700;
     }
 
     .prose-content hr {
-        @apply my-8 border-neutral-200;
+        @apply my-8 border-neutral-200 dark:border-neutral-700;
     }
 
     .prose-content img {

@@ -12,6 +12,8 @@ class SearchForm(forms.Form):
         widget=forms.TextInput(attrs={
             'placeholder': '搜索文章标题或正文',
             'class': 'w-full rounded border border-neutral-300 px-3 py-2 text-sm '
-                     'focus:border-brand focus:outline-none',
+                     'focus:border-brand focus:outline-none '
+                     'dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100 '
+                     'dark:placeholder-neutral-500',
         }),
     )

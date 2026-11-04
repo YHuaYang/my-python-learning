@@ -10,7 +10,7 @@ views.py 处理用户请求：查数据 → 选模板 → 返回 HTML。
 筛选条件「列表里过滤了、详情里忘了过滤」是内容站最常见的越权漏洞。
 """
 from django.shortcuts import render,get_object_or_404
-from .models import Post,Category,Tag
+from .models import Post,Category,Tag,DailySong,Project,WeeklyProgress,Profile
 from .forms import SearchForm
 from .ranking import sort_by_hot
 from django.db.models import F,Q
@@ -62,12 +62,6 @@ def post_list(request):
         'sort': sort,
         'sort_options': SORT_OPTIONS,
     })
-
-
-def about(request):
-    """关于页：纯静态内容，不需要查数据库，所以不传上下文。"""
-    # request 参数虽然没用到，但签名里必须有，Django 会按位置传入
-    return render(request, 'blog/about.html')
 
 
 def post_detail(request, slug):
@@ -160,3 +154,45 @@ def _paginate(request, queryset, per_page=5):
     """对 queryset 分页，返回 page_obj。三个列表视图共用。"""
     paginator = Paginator(queryset, per_page)
     return paginator.get_page(request.GET.get('page'))
+
+
+def projects(request):
+    """项目列表。按 sort_order 升序（手控排序），再按创建时间倒序作为次级排序。"""
+    items = Project.objects.all()
+    return render(request, 'blog/projects.html', {'projects': items})
+
+
+def project_detail(request, slug):
+    """项目详情。"""
+    project = get_object_or_404(Project, slug=slug)
+    return render(request, 'blog/project_detail.html', {'project': project})
+
+
+def progress_list(request):
+    """学习进度列表，按年、周倒序。"""
+    items = WeeklyProgress.objects.all()
+    return render(request, 'blog/progress_list.html', {
+        'progresses': items,
+        'page_obj': _paginate(request, items, per_page=12),
+    })
+
+def progress_detail(request, year, week):
+    """某周的进度详情。用年+周定位，而不是主键：URL 可读且稳定。"""
+    item = get_object_or_404(WeeklyProgress, year=year, week=week)
+    return render(request, 'blog/progress_detail.html', {'progress': item})
+
+
+def song_list(request):
+    """每日歌曲列表，一天一首，按日期倒序。"""
+    items = DailySong.objects.all()
+    return render(request, 'blog/song_list.html', {
+        'songs': items,
+        'page_obj': _paginate(request, items, per_page=12),
+    })
+
+
+def about(request):
+    """关于页：静态文字 + 可选的个人资料。"""
+    # 用 get_or_create 而不是直接取：还没在后台填资料时不能报 404
+    profile, _ = Profile.objects.get_or_create(pk=1)
+    return render(request, 'blog/about.html', {'profile': profile})
