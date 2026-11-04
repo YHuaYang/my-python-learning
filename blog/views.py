@@ -9,6 +9,8 @@ views.py 处理用户请求：查数据 → 选模板 → 返回 HTML。
 否则草稿（published_date 为 NULL）会被直接访问到。
 筛选条件「列表里过滤了、详情里忘了过滤」是内容站最常见的越权漏洞。
 """
+from datetime import date
+
 from django.shortcuts import render,get_object_or_404
 from .models import Post,Category,Tag,DailySong,Project,WeeklyProgress,Profile
 from .forms import SearchForm
@@ -27,7 +29,12 @@ DEFAULT_SORT = 'latest'
 
 
 def post_list(request):
-    """首页：已发布文章列表，支持「最新 / 热门」切换。"""
+    """首页：文章列表 + 个人简介 / 今日歌曲 / 本周进度 / 项目精选。
+
+    规划文档把首页定位为「聚合入口」而不是纯文章列表，
+    所以这里要一次查多个模型。每个区块都用 first() 或切片取少量数据，
+    不用全部取出来再截断。
+    """
     posts = (
         Post.objects
         .filter(status='published')
@@ -42,6 +49,9 @@ def post_list(request):
     if sort not in SORT_OPTIONS:
         sort = DEFAULT_SORT
 
+    # WIDGET_LIMIT：首页只展示少量内容，完整列表在各自的独立页面
+    widget_limit = 5
+
     if sort == 'hot':
         # 热门排序必须在 Python 层算，所以先把全部结果取出来。
         # 这里有意不用 Paginator：热门排序需要先对整个集合排序才能
@@ -52,8 +62,21 @@ def post_list(request):
     else:
         # 用 get_page 而不是 page：page() 在页码非法时抛异常导致 500，
         # get_page() 会把非法页码自动修正为第 1 页或最后一页
-        paginator = Paginator(posts, 5)
+        paginator = Paginator(posts, widget_limit)
         page_obj = paginator.get_page(request.GET.get('page'))
+
+    # 今日歌曲：按日期精确匹配。没有当天的就不显示这个区块，
+    # 不拿旧歌凑数，否则「今日歌曲」会变成「上一首歌」
+    today_song = DailySong.objects.filter(date=date.today()).first()
+
+    # 本周进度：取最新一条（模型 Meta 已按 -year、-week 排序）
+    latest_progress = WeeklyProgress.objects.first()
+
+    # 项目精选：已经在后台用 sort_order 手控好了顺序，取前 3 个
+    featured_projects = Project.objects.all()[:3]
+
+    # 个人资料：Profile 是单例，还没填时返回空对象而不是 404
+    profile, _ = Profile.objects.get_or_create(pk=1)
 
     return render(request, 'blog/post_list.html', {
         'posts': page_obj,
@@ -61,6 +84,10 @@ def post_list(request):
         'categories': categories,
         'sort': sort,
         'sort_options': SORT_OPTIONS,
+        'today_song': today_song,
+        'latest_progress': latest_progress,
+        'featured_projects': featured_projects,
+        'profile': profile,
     })
 
 
