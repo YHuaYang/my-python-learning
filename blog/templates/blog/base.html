@@ -28,19 +28,14 @@
                 <a href="{% url 'post_list' %}" class="text-lg font-semibold text-brand hover:text-brand-dark">
                     多于点线圈
                 </a>
-                <div class="flex items-center gap-1">
-                    <nav class="flex items-center gap-1 text-sm">
-                        <a href="{% url 'post_list' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">首页</a>
-                        <a href="{% url 'projects' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">项目</a>
-                        <a href="{% url 'progress_list' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">进度</a>
-                        <a href="{% url 'song_list' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">歌曲</a>
-                        <a href="{% url 'search' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">搜索</a>
-                        <a href="{% url 'about' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">关于</a>
-                    </nav>
-                    <button id="theme-toggle" type="button"
-                            class="ml-1 rounded px-2.5 py-1.5 text-base leading-none text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-                            aria-label="切换暗色模式">☾</button>
-                </div>
+                <nav class="flex items-center gap-1 text-sm">
+                    <a href="{% url 'post_list' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">首页</a>
+                    <a href="{% url 'projects' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">项目</a>
+                    <a href="{% url 'progress_list' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">进度</a>
+                    <a href="{% url 'song_list' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">歌曲</a>
+                    <a href="{% url 'search' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">搜索</a>
+                    <a href="{% url 'about' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">关于</a>
+                </nav>
             </div>
         </header>
 
@@ -48,15 +43,20 @@
             {% block content %}{% endblock %}
         </main>
 
-        <footer class="border-t border-neutral-200 py-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
-            <p>&copy; 2026 多于点线圈</p>
-            <p class="mt-2">
-                <a href="{% url 'rss' %}" class="hover:text-brand">RSS 订阅</a>
-                <span class="mx-2 text-neutral-300 dark:text-neutral-600">|</span>
-                <a href="{% url 'sitemap' %}" class="hover:text-brand">Sitemap</a>
-            </p>
+        <footer class="border-t border-neutral-200 py-6 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+            <div class="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-6 px-4">
+                <div>
+                    <p>&copy; 2026 多于点线圈</p>
+                    <p class="mt-1">
+                        <a href="{% url 'rss' %}" class="hover:text-brand">RSS 订阅</a>
+                        <span class="mx-2 text-neutral-300 dark:text-neutral-600">|</span>
+                        <a href="{% url 'sitemap' %}" class="hover:text-brand">Sitemap</a>
+                    </p>
+                </div>
+                <div data-react="theme-selector"></div>
+            </div>
         </footer>
 
-        <script src="{% static 'js/theme.js' %}"></script>
+        <script type="module" src="{% static 'js/bundle.js' %}"></script>
     </body>
 </html>

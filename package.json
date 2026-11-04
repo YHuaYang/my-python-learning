@@ -3,12 +3,27 @@
   "version": "0.1.0",
   "private": true,
   "description": "个人博客与每日新闻聚合系统 - 前端构建",
+  "type": "module",
   "scripts": {
     "css:build": "tailwindcss -i assets/css/tailwind-input.css -o blog/static/css/tailwind.css --minify",
-    "css:watch": "tailwindcss -i assets/css/tailwind-input.css -o blog/static/css/tailwind.css --watch"
+    "css:watch": "tailwindcss -i assets/css/tailwind-input.css -o blog/static/css/tailwind.css --watch",
+    "js:build": "vite build",
+    "js:watch": "vite build --watch",
+    "build": "npm run css:build && npm run js:build",
+    "dev": "npm run css:watch & npm run js:watch",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",
-    "tailwindcss": "^4.3.3"
+    "@types/react": "^19.3.1",
+    "@types/react-dom": "^19.3.1",
+    "@vitejs/plugin-react": "^5.1.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   }
 }
