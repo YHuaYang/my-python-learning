@@ -8,7 +8,10 @@ class PostSitemap(Sitemap):
     priority = 0.8
 
     def items(self):
-        return Post.objects.filter(status='published')
+        # 必须带 order_by：sitemap 内部用 Paginator 分页，
+        # 无序 QuerySet 会触发 UnorderedObjectListWarning，
+        # 且可能导致某些文章在不同分页间重复或遗漏
+        return Post.objects.filter(status='published').order_by('-published_date')
 
     def lastmod(self, obj):
         return obj.published_date
