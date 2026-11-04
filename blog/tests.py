@@ -8,10 +8,14 @@
 
 测试会创建独立的 test_db.sqlite3，结束后销毁，不碰真实数据库。
 """
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 
 from .models import Category, Post, Tag
+from .ranking import hot_score, sort_by_hot
 
 
 def make_user(username):
@@ -241,3 +245,125 @@ class FeedAndSitemapTest(TestCase):
         content = response.content.decode()
         # 用 Site 的 domain 拼出的绝对地址，末尾是站点根和关于页
         self.assertIn('/about/', content)
+
+
+class HotRankingTest(TestCase):
+    """热度排序算法（Hacker News 公式）。
+
+    公式：score = views / (age_hours + 2) ** 1.5
+    这些测试固定住了参数与边界行为，改动公式时会立刻暴露。
+    """
+
+    def setUp(self):
+        self.user = make_user('hotuser')
+        self.now = timezone.now()
+
+    def _make(self, title, views, hours_ago):
+        post = Post.objects.create(
+            author=self.user,
+            title=title,
+            text='x',
+            status='published',
+        )
+        # 直接写库绕过 save()，以便精确控制发布时间
+        Post.objects.filter(pk=post.pk).update(
+            views=views,
+            published_date=self.now - timedelta(hours=hours_ago),
+        )
+        post.refresh_from_db()
+        return post
+
+    def test_formula_matches_manual_calculation(self):
+        """分数必须严格等于 views / (hours + 2) ** 1.5"""
+        post = self._make('公式验证', views=10, hours_ago=22)
+        expected = 10 / (22 + 2) ** 1.5
+        self.assertAlmostEqual(hot_score(post, now=self.now), expected, places=10)
+
+    def test_fresh_post_is_damped_by_offset(self):
+        """刚发布的文章分母是 2 而非 0，分数不会爆炸"""
+        post = self._make('刚发布', views=1, hours_ago=0)
+        # 1 / 2^1.5 而不是 1 / 0
+        self.assertAlmostEqual(hot_score(post, now=self.now), 1 / 2 ** 1.5, places=6)
+
+    def test_more_views_ranks_higher_at_same_age(self):
+        """同年龄时，阅读量高的排前面"""
+        low = self._make('低阅读', views=1, hours_ago=10)
+        high = self._make('高阅读', views=100, hours_ago=10)
+        self.assertGreater(hot_score(high, now=self.now), hot_score(low, now=self.now))
+
+    def test_newer_ranks_higher_at_same_views(self):
+        """同阅读量时，更新的排前面"""
+        old = self._make('旧文章', views=5, hours_ago=100)
+        new = self._make('新文章', views=5, hours_ago=1)
+        self.assertGreater(hot_score(new, now=self.now), hot_score(old, now=self.now))
+
+    def test_zero_views_scores_zero(self):
+        post = self._make('零阅读', views=0, hours_ago=1)
+        self.assertEqual(hot_score(post, now=self.now), 0.0)
+
+    def test_future_date_does_not_produce_negative_age(self):
+        """时钟回拨导致未来时间时，年龄兜底为 0，不出现负数或无穷大"""
+        post = self._make('未来时间', views=5, hours_ago=-10)
+        self.assertAlmostEqual(hot_score(post, now=self.now), 5 / 2 ** 1.5, places=6)
+
+    def test_sort_by_hot_orders_descending(self):
+        self._make('A阅读少', views=1, hours_ago=10)
+        self._make('B阅读多', views=50, hours_ago=10)
+        self._make('C很旧', views=50, hours_ago=1000)
+
+        posts = list(Post.objects.filter(status='published'))
+        ordered = sort_by_hot(posts, now=self.now)
+        self.assertEqual(ordered[0].title, 'B阅读多')
+
+
+class HomeSortSwitchTest(TestCase):
+    """首页「最新 / 热门」切换。"""
+
+    def setUp(self):
+        self.user = make_user('sorter')
+        now = timezone.now()
+        # 稍旧但阅读量很高（10000/(50+2)^1.5 ≈ 26.6）
+        old_hot = Post.objects.create(
+            author=self.user, title='旧的爆款', text='x', status='published'
+        )
+        Post.objects.filter(pk=old_hot.pk).update(
+            views=10000, published_date=now - timedelta(hours=50)
+        )
+        # 最新但完全没人看（0 阅读，分数恒为 0）
+        new_cold = Post.objects.create(
+            author=self.user, title='新的冷门', text='x', status='published'
+        )
+        Post.objects.filter(pk=new_cold.pk).update(
+            views=0, published_date=now - timedelta(hours=0)
+        )
+
+    def test_default_is_latest(self):
+        """不带参数时按时间倒序，新的在前"""
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        titles = [p.title for p in response.context['posts']]
+        self.assertEqual(titles[0], '新的冷门')
+
+    def test_sort_hot_puts_high_views_first(self):
+        """sort=hot 时阅读量高的在前
+
+        选题参数在说明一点：公式并非「阅读量高就一定第一」。
+        views=100 / 500 小时 算出来是 0.0089，反而输给
+        views=1 / 1 小时的 0.1925（新文章权重优势）。
+        所以这里用 10000 阅读对 50 小时，差距足够大才能压过时间因素。
+        """
+        response = self.client.get('/', {'sort': 'hot'})
+        self.assertEqual(response.status_code, 200)
+        titles = [p.title for p in response.context['posts']]
+        self.assertEqual(titles[0], '旧的爆款')
+
+    def test_invalid_sort_falls_back_to_latest(self):
+        """非法排序值回退到最新，不报错"""
+        response = self.client.get('/', {'sort': 'hacker'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['sort'], 'latest')
+
+    def test_hot_mode_ignores_page_param(self):
+        """热门模式不分页，传 page 也不应报错"""
+        response = self.client.get('/', {'sort': 'hot', 'page': 999})
+        self.assertEqual(response.status_code, 200)

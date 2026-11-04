@@ -1,7 +1,21 @@
 {% extends "blog/base.html" %}
 {% block content %}
+    <div class="mb-8 flex items-center gap-2 text-sm">
+        {% for value, label in sort_options.items %}
+            {% if value == sort %}
+                <span class="rounded-full bg-brand px-3 py-1 text-white">{{ label }}</span>
+            {% else %}
+                <a href="?sort={{ value }}"
+                   class="rounded-full border border-neutral-300 px-3 py-1 text-neutral-600 transition-colors hover:border-brand hover:text-brand">{{ label }}</a>
+            {% endif %}
+        {% endfor %}
+    </div>
+
     {% include "blog/_posts.html" %}
-    {% include "blog/_pagination.html" %}
+
+    {% if sort == 'latest' %}
+        {% include "blog/_pagination.html" %}
+    {% endif %}
 
     {% if categories %}
         <nav class="mt-12 border-t border-neutral-200 pt-6">
