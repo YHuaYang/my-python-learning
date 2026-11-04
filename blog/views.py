@@ -18,7 +18,13 @@ from django.core.paginator import Paginator
 
 def post_list(request):
     """首页：已发布文章列表（新→旧），分页显示。"""
-    posts = Post.objects.filter(status='published').order_by('-published_date')
+    posts = (
+        Post.objects
+        .filter(status='published')
+        .select_related('category')
+        .prefetch_related('tags')
+        .order_by('-published_date')
+    )
     categories = Category.objects.all()
 
     # 每页 5 条。用 get_page 而不是 page：page() 在页码非法时抛异常导致 500，
@@ -45,9 +51,15 @@ def post_detail(request, slug):
     # get() 找不到会抛 DoesNotExist → 500 服务器错误；
     # get_object_or_404 会自动转成 404 页面。
     # 「文章不存在」是正常情况，不该表现为代码出错。
-    post = get_object_or_404(Post, slug=slug, status='published')
+    post = get_object_or_404(
+        Post.objects.select_related('category').prefetch_related('tags'),
+        slug=slug,
+        status='published',
+    )
     Post.objects.filter(pk=post.pk).update(views=F('views') + 1)
-    post.refresh_from_db()
+    # 只在内存里 +1，不用 refresh_from_db() 再查一次数据库：
+    # update() 已把新值写入库中，这里只需要让模板显示的数字对得上
+    post.views += 1
     return render(request, 'blog/post_detail.html', {"post": post})
 
 
@@ -58,10 +70,13 @@ def category_posts(request, slug):
     # 用 Post.objects.filter(category=category) 而不是 category.posts：
     # 两者 SQL 完全相同，但后者是 related_name 动态生成的反向属性，
     # 静态类型检查器看不到它，写成正向查询能消除误报且意图更明确
-    posts = Post.objects.filter(
-        category=category,
-        status='published',
-    ).order_by('-published_date')
+    posts = (
+        Post.objects
+        .filter(category=category, status='published')
+        .select_related('category')
+        .prefetch_related('tags')
+        .order_by('-published_date')
+    )
     # title 传给模板做页面标题，这样 post_filter.html 不用判断
     # 「当前是分类页还是标签页」，两个视图共用同一个模板
     page_obj = _paginate(request, posts)
@@ -81,10 +96,13 @@ def tag_posts(request, slug):
     tag = get_object_or_404(Tag, slug=slug)
     # 同样改用正向查询：Post.objects.filter(tags=tag) 与 tag.posts 等价，
     # 但静态检查器能识别前者，避免 related_name 造成的类型报错
-    posts = Post.objects.filter(
-        tags=tag,
-        status='published',
-    ).order_by('-published_date')
+    posts = (
+        Post.objects
+        .filter(tags=tag, status='published')
+        .select_related('category')
+        .prefetch_related('tags')
+        .order_by('-published_date')
+    )
     page_obj = _paginate(request, posts)
     return render(request, 'blog/post_filter.html', {
         'title': f'标签：{tag.name}',
