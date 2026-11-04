@@ -11,10 +11,27 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import mimetypes
 import os
 
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
+
+# 显式注册前端资源的 MIME 类型。
+#
+# 为什么需要：Windows 上如果注册表把 .js 关联到某个缺 Content Type 的
+# 项，Python 的 mimetypes 会把 .js 判成 text/plain。
+# 而浏览器对 <script type="module"> 有严格 MIME 检查，
+# 收到 text/plain 会直接拒绝执行且不报错到页面，
+# 表现为「JS 完全没跑」，极难往 MIME 方向排查。
+#
+# 注意 strict 参数的含义与字面相反：
+#   strict=False → 只在没有映射时补充（本次不生效，因为已有 text/plain）
+#   strict=True  → 写入系统级映射，覆盖已有的错误值（本次需要这个）
+mimetypes.add_type('text/javascript', '.js', strict=True)
+mimetypes.add_type('text/javascript', '.mjs', strict=True)
+mimetypes.add_type('text/css', '.css', strict=True)
+mimetypes.add_type('image/svg+xml', '.svg', strict=True)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

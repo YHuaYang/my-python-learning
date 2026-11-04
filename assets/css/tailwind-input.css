@@ -12,9 +12,17 @@
 @import "tailwindcss";
 
 /* 告诉 Tailwind 去哪里扫描用到的类名。
- * Django 模板不在默认扫描范围内，不指定的话生成的 CSS 会是空的。
- * 路径相对本文件（assets/css/）计算：../../blog/templates */
+ * 默认只扫项目根下的常规目录，Django 模板与 React 组件都要显式声明，
+ * 不写的话这些文件里的类不会出现在产物里。
+ * 路径相对本文件（assets/css/）计算。
+ *
+ * 两处都要：
+ *   1. blog/templates —— Django 模板里的 class
+ *   2. assets/js      —— React 组件（JSX 里的 className）
+ * 漏第二项时组件仍能渲染，但所有 Tailwind 类都失效，
+ * 表现为缩略图变成无颜色的空盒子。 */
 @source "../../blog/templates";
+@source "../js";
 
 /* 设计令牌：定义后自动生成 bg-brand / text-brand / border-brand 等工具类，
  * 对应规划文档里「中性底色 + 单一主色」的配色要求 */
