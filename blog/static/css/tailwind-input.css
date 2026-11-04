@@ -22,3 +22,82 @@
         "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, monospace;
 }
+
+/* Markdown 正文排版。
+ * Tailwind 的 preflight 会把 h2/ul/table 等标签的默认样式全部清零，
+ * 所以 Markdown 渲染出来的标题、列表、引用、代码块都需要在这里补回。 */
+@layer components {
+    .prose-content {
+        max-width: 72ch;
+    }
+
+    .prose-content h2 {
+        @apply mt-8 mb-3 text-2xl font-bold leading-snug text-neutral-900;
+    }
+
+    .prose-content h3 {
+        @apply mt-6 mb-2 text-xl font-semibold leading-snug text-neutral-900;
+    }
+
+    .prose-content h4 {
+        @apply mt-5 mb-2 text-base font-semibold text-neutral-900;
+    }
+
+    .prose-content p {
+        @apply my-4;
+    }
+
+    .prose-content ul {
+        @apply my-4 list-disc space-y-1.5 pl-6;
+    }
+
+    .prose-content ol {
+        @apply my-4 list-decimal space-y-1.5 pl-6;
+    }
+
+    .prose-content blockquote {
+        @apply my-4 border-l-4 border-neutral-300 pl-4 text-neutral-600 italic;
+    }
+
+    .prose-content a {
+        @apply text-brand underline decoration-brand/30 underline-offset-2 hover:decoration-brand;
+    }
+
+    .prose-content code {
+        @apply rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[0.9em] text-neutral-800;
+    }
+
+    /* 代码块内部不要双重背景与内边距，
+     * 外层 .codehilite 已经有底色（由 pygments.css 提供） */
+    .prose-content .codehilite {
+        @apply my-5 overflow-x-auto rounded-lg;
+    }
+
+    .prose-content .codehilite pre {
+        @apply m-0 p-4 font-mono text-sm leading-relaxed;
+    }
+
+    .prose-content .codehilite code {
+        @apply bg-transparent p-0 text-inherit;
+    }
+
+    .prose-content table {
+        @apply my-5 w-full border-collapse text-sm;
+    }
+
+    .prose-content th {
+        @apply border-b-2 border-neutral-300 px-3 py-2 text-left font-semibold;
+    }
+
+    .prose-content td {
+        @apply border-b border-neutral-200 px-3 py-2;
+    }
+
+    .prose-content hr {
+        @apply my-8 border-neutral-200;
+    }
+
+    .prose-content img {
+        @apply my-5 max-w-full rounded-lg;
+    }
+}

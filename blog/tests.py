@@ -14,6 +14,18 @@ from django.test import TestCase
 from .models import Category, Post, Tag
 
 
+def make_user(username):
+    """建一个测试用户。
+
+    为什么要单独封一个函数：django-stubs 把 get_user_model() 推导为
+    type[AbstractBaseUser]，而 create_user 定义在 UserManager 上，
+    静态检查器因此报错。运行时完全正常（20 个测试全过），
+    这里集中屏蔽一次，避免四处重复。
+    """
+    User = get_user_model()
+    return User.objects.create_user(username=username, password='x')  # type: ignore[attr-defined]
+
+
 class DraftIsolationTest(TestCase):
     """草稿 / 下架文章绝不能出现在前台。
 
@@ -24,8 +36,7 @@ class DraftIsolationTest(TestCase):
     def setUp(self):
         # setUp 在每个 test_ 方法前执行；每个方法结束后事务回滚，
         # 所以测试之间互不影响，可以放心造数据
-        User = get_user_model()
-        self.user = User.objects.create_user(username='tester', password='x')
+        self.user = make_user('tester')
 
         self.category = Category.objects.create(name='教程', type='教程')
         self.tag = Tag.objects.create(name='Django')
@@ -107,8 +118,7 @@ class PaginationTest(TestCase):
     """分页行为，重点是非法页码不能导致 500。"""
 
     def setUp(self):
-        User = get_user_model()
-        self.user = User.objects.create_user(username='pager', password='x')
+        self.user = make_user('pager')
         # 造 7 篇已发布文章，每页 5 条 → 2 页
         for i in range(7):
             Post.objects.create(
@@ -151,8 +161,7 @@ class PostModelTest(TestCase):
     """模型层的两个关键逻辑：中文 slug 生成、状态与时间的一致性。"""
 
     def setUp(self):
-        User = get_user_model()
-        self.user = User.objects.create_user(username='modeluser', password='x')
+        self.user = make_user('modeluser')
 
     def test_slug_generated_from_chinese_title(self):
         """中文标题能生成非空 slug（依赖 allow_unicode=True）"""
@@ -203,8 +212,7 @@ class FeedAndSitemapTest(TestCase):
     """RSS 与 sitemap 的结构正确性。"""
 
     def setUp(self):
-        User = get_user_model()
-        self.user = User.objects.create_user(username='feeduser', password='x')
+        self.user = make_user('feeduser')
         Post.objects.create(
             author=self.user, title='订阅里的文章', text='x', status='published'
         )
