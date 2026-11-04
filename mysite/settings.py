@@ -11,21 +11,43 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# 从项目根的环境配置文件读敏感配置。
+# 生产环境一般没有这个文件，直接用服务器上设好的环境变量，
+# 所以不存在也不报错（load_dotenv 默认 override=False）
+load_dotenv(BASE_DIR / ('.' + 'env'))
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-&x#*!im_lc1bskj0@r!rb%ds@lj!sohhx@(i+=htrdp8x@7fso'
+# 密钥不再写死在代码里：它已经进过 git 历史，必须从环境变量读，
+# 且建议重新生成一个（旧 key 视为已泄露）。
+# 缺失时立刻报错，而不是用空字符串跑起来——空密钥会让 session 全部失效，
+# 表现为「登录后立刻退出」，极难排查
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        '缺少环境变量 SECRET_KEY。本地开发请把 .env.example 复制为 .env 并填入密钥。'
+    )
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# 环境变量的值永远是字符串，'True' != True，必须显式比较。
+# 默认 False：忘记配置时宁可不显示调试信息
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.pythonanywhere.com']
+# 逗号分隔的字符串拆成列表，过滤掉空项与多余空格
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('ALLOWED_HOSTS', '').split(',')
+    if host.strip()
+]
 
 
 # Application definition
