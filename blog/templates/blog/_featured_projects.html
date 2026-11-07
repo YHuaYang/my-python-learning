@@ -7,12 +7,16 @@
         <ul class="mt-3 space-y-3">
             {% for project in featured_projects %}
                 <li>
-                    <a href="{% url 'project_detail' project.slug %}" class="block hover:text-brand">
-                        <p class="text-sm font-semibold">{{ project.name }}</p>
-                        {% if project.summary %}
-                            <p class="mt-0.5 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{{ project.summary|truncatechars:50 }}</p>
+                    <div class="flex items-baseline justify-between gap-2">
+                        <a href="{% url 'project_detail' project.slug %}" class="text-sm font-semibold hover:text-brand">{{ project.name }}</a>
+                        {% if project.github_url %}
+                            <a href="{{ project.github_url }}" target="_blank" rel="noopener noreferrer"
+                               class="shrink-0 text-xs text-brand hover:underline">GitHub &rarr;</a>
                         {% endif %}
-                    </a>
+                    </div>
+                    {% if project.summary %}
+                        <p class="mt-0.5 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{{ project.summary|truncatechars:50 }}</p>
+                    {% endif %}
                 </li>
             {% endfor %}
         </ul>
