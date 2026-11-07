@@ -104,6 +104,22 @@
         @apply my-5 w-full border-collapse text-sm;
     }
 
+    /* 窄屏上列多的表格会把父容器撑宽，导致整页出现横向滚动条。
+     * 用 block + overflow-x-auto 让表格自身可横向滚动，
+     * 不影响页面其他部分。宽屏下 w-max 保证表格不被压缩变形。 */
+    .prose-content table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+
+    @media (min-width: 640px) {
+        .prose-content table {
+            display: table;
+            white-space: normal;
+        }
+    }
+
     .prose-content th {
         @apply border-b-2 border-neutral-300 px-3 py-2 text-left font-semibold dark:border-neutral-600;
     }
