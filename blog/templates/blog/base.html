@@ -23,47 +23,24 @@
         <title>{% block title %}多于点线圈-blog{% endblock %}</title>
     </head>
     <body class="min-h-screen flex flex-col bg-white text-neutral-800 font-sans antialiased dark:bg-neutral-900 dark:text-neutral-200">
-        <header class="sticky top-0 z-20 border-b border-neutral-200 bg-white/95 backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95">
-            <div class="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3">
-                <a href="{% url 'post_list' %}" class="shrink-0 text-lg font-semibold text-brand hover:text-brand-dark">
+        <header class="sticky top-0 z-10 border-b border-neutral-200 bg-white/95 backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95">
+            <div class="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <a href="{% url 'post_list' %}" class="text-lg font-semibold text-brand hover:text-brand-dark">
                     多于点线圈
                 </a>
-
-                <details class="group relative sm:hidden">
-                    <summary class="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-brand dark:text-neutral-400 dark:hover:bg-neutral-800 [&::-webkit-details-marker]:hidden">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-5 w-5 group-open:hidden" aria-hidden="true">
-                            <path d="M4 6h16M4 12h16M4 18h16" />
-                        </svg>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="hidden h-5 w-5 group-open:block" aria-hidden="true">
-                            <path d="M6 6l12 12M18 6L6 18" />
-                        </svg>
-                        <span class="sr-only">打开导航菜单</span>
-                    </summary>
-
-                    <nav class="absolute right-0 top-full z-30 mt-2 w-44 rounded-xl border border-neutral-200 bg-white p-2 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
-                        <a href="{% url 'post_list' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">首页</a>
-                        <a href="{% url 'projects' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">项目</a>
-                        <a href="{% url 'progress_list' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">进度</a>
-                        <a href="{% url 'song_list' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">歌曲</a>
-                        <a href="{% url 'search' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">搜索</a>
-                        <a href="{% url 'about' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">关于</a>
-                    </nav>
-                </details>
-
-                <nav class="hidden items-center gap-1 text-sm sm:flex">
+                <nav class="flex items-center gap-1 text-sm">
                     <a href="{% url 'post_list' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">首页</a>
                     <a href="{% url 'projects' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">项目</a>
                     <a href="{% url 'progress_list' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">进度</a>
                     <a href="{% url 'song_list' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">歌曲</a>
                     <a href="{% url 'search' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">搜索</a>
                     <a href="{% url 'about' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">关于</a>
+                    <div data-react="theme-toggle" class="ml-1"></div>
                 </nav>
-
-                <div data-react="theme-toggle" class="shrink-0"></div>
             </div>
         </header>
 
-        <main class="mx-auto w-full max-w-4xl flex-1 px-4 py-6 sm:py-8">
+        <main class="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
             {% block content %}{% endblock %}
         </main>
 
