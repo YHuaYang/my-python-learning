@@ -197,11 +197,11 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-# 用户上传的文件（图片、音频）。
+# 用户上传的文件（封面图等）。
 # 与 STATIC_ROOT 的区别：static 是随代码发布的资源，media 是运行时上传的内容，
 # 两者的服务方式不同——media 不能跑 collectstatic，也不能进版本库。
 MEDIA_URL = 'media/'
-# upload_to 存到 MEDIA_ROOT 之下，例如 songs/2026/11/xxx.mp3
+# upload_to 存到 MEDIA_ROOT 之下，例如 projects/covers/xxx.png
 MEDIA_ROOT = BASE_DIR / 'media'
 # 单次上传大小上限，防止误传大文件把磁盘塞满。
 # Django 4.2+ 用 DATA_UPLOAD_MAX_MEMORY_SIZE 控制表单内存，
