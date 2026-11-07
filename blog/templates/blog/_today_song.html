@@ -2,28 +2,22 @@
     <section class="rounded-xl border border-neutral-200 p-5 dark:border-neutral-700">
         <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-400">今日歌曲</h2>
         <div class="mt-3 flex items-start gap-4">
-            {% if today_song.cover_url %}
-                <img src="{{ today_song.cover_url }}" alt="{{ today_song.title }} 封面"
+            {% if today_song.cover %}
+                <img src="{{ today_song.cover.url }}" alt="{{ today_song.title }} 封面"
                      class="h-16 w-16 shrink-0 rounded-lg object-cover">
+            {% else %}
+                <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-xl text-brand dark:bg-brand/20">
+                    ♪
+                </div>
             {% endif %}
             <div class="min-w-0 flex-1">
-                <p class="text-base font-semibold">
-                    {% if today_song.song_url %}
-                        <a href="{{ today_song.song_url }}" target="_blank" rel="noopener noreferrer"
-                           class="hover:text-brand">{{ today_song.title }}</a>
-                    {% else %}
-                        {{ today_song.title }}
-                    {% endif %}
-                </p>
+                <p class="text-base font-semibold">{{ today_song.title }}</p>
                 <p class="text-sm text-neutral-500 dark:text-neutral-400">{{ today_song.artist }}</p>
                 {% if today_song.comment %}
                     <p class="mt-2 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">{{ today_song.comment }}</p>
                 {% endif %}
             </div>
         </div>
-        {% if today_song.embed_url %}
-            <iframe class="mt-3 h-20 w-full rounded-lg" frameborder="0"
-                    allow="autoplay; encrypted-media" src="{{ today_song.embed_url }}"></iframe>
-        {% endif %}
+        <a href="{% url 'song_list' %}" class="mt-3 inline-block text-xs text-brand hover:underline">全部歌曲 &rarr;</a>
     </section>
 {% endif %}

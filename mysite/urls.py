@@ -14,10 +14,19 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import path,include
+from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('blog.urls')),
 ]
+
+# 开发环境由 Django 直接服务用户上传的文件。
+# 生产环境（DEBUG=False）不能这么做：static() 只在 DEBUG 时生效，
+# 上线要交给 Nginx 或 WhiteNoise 处理 MEDIA_ROOT，
+# 否则上传的图片和音频全部 404。
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

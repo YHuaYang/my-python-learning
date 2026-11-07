@@ -212,12 +212,21 @@ class DailySong(models.Model):
     date = models.DateField(unique=True)
     title = models.CharField(max_length=200)
     artist = models.CharField(max_length=100)
-    cover_url = models.URLField(blank=True, default='')
+
+    # 封面可选：没传时前台用默认占位图，不阻断保存
+    cover = models.ImageField(upload_to='songs/covers/', blank=True, default='')
+
+    # 音频必填（业务上）。但迁移时不能直接加非空字段，
+    # 否则 Django 会要求给已有行填一个默认值。
+    # 分两步：先 default='' 加字段，回填/确认后再改非空。
+    # 当前表为空，所以用 default='' 过渡是安全的。
+    audio_file = models.FileField(upload_to='songs/audio/', default='')
+
+    # 时长（秒）。存下来后播放器不必等音频加载完就能显示总长；
+    # 留 0 表示未知，前端会回退为读 audio.duration
+    duration = models.PositiveIntegerField(default=0, blank=True)
+
     comment = models.TextField(blank=True, default='')
-    # 平台官方播放器外链（网易云/QQ音乐等），不存音频文件
-    song_url = models.URLField(blank=True, default='')
-    # 官方 embed iframe 的 src，直接塞进模板的 iframe 里
-    embed_url = models.URLField(blank=True, default='')
 
     class Meta:
         ordering = ['-date']

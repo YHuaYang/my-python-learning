@@ -15,6 +15,10 @@ db.sqlite3
 # Static folder at project root
 /static/
 
+# 用户上传的文件（图片、音频）。属于运行时内容，不进版本库；
+# 需要备份的话单独复制 media 目录
+/media/
+
 # macOS
 ._*
 .DS_Store

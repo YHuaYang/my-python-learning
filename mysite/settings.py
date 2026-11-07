@@ -197,6 +197,19 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
+# 用户上传的文件（图片、音频）。
+# 与 STATIC_ROOT 的区别：static 是随代码发布的资源，media 是运行时上传的内容，
+# 两者的服务方式不同——media 不能跑 collectstatic，也不能进版本库。
+MEDIA_URL = 'media/'
+# upload_to 存到 MEDIA_ROOT 之下，例如 songs/2026/11/xxx.mp3
+MEDIA_ROOT = BASE_DIR / 'media'
+# 单次上传大小上限，防止误传大文件把磁盘塞满。
+# Django 4.2+ 用 DATA_UPLOAD_MAX_MEMORY_SIZE 控制表单内存，
+# FILE_UPLOAD_MAX_MEMORY_SIZE 是「超过这个大小就写临时文件」的阈值，
+# 真正的上限要靠 storage 或 Web 服务器限制，这里只给一个项目级常量供视图参考
+MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20MB
+
+
 # 生产环境安全配置：只在 DEBUG=False 且启用了 HTTPS 时才生效。
 #
 # 为什么需要单独的环境变量开关：本地用 DEBUG=False 模拟生产时没有 HTTPS，
