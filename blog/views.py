@@ -12,7 +12,7 @@ views.py 处理用户请求：查数据 → 选模板 → 返回 HTML。
 from datetime import date
 
 from django.shortcuts import render,get_object_or_404
-from .models import Post,Category,Tag,DailySong,Project,WeeklyProgress,Profile
+from .models import Post,Category,Tag,Project,WeeklyProgress,Profile
 from .forms import SearchForm
 from .ranking import sort_by_hot
 from django.db.models import F,Q
@@ -65,10 +65,6 @@ def post_list(request):
         paginator = Paginator(posts, widget_limit)
         page_obj = paginator.get_page(request.GET.get('page'))
 
-    # 今日歌曲：按日期精确匹配。没有当天的就不显示这个区块，
-    # 不拿旧歌凑数，否则「今日歌曲」会变成「上一首歌」
-    today_song = DailySong.objects.filter(date=date.today()).first()
-
     # 本周进度：取最新一条（模型 Meta 已按 -year、-week 排序）
     latest_progress = WeeklyProgress.objects.first()
 
@@ -84,7 +80,6 @@ def post_list(request):
         'categories': categories,
         'sort': sort,
         'sort_options': SORT_OPTIONS,
-        'today_song': today_song,
         'latest_progress': latest_progress,
         'featured_projects': featured_projects,
         'profile': profile,
@@ -207,15 +202,6 @@ def progress_detail(request, year, week):
     """某周的进度详情。用年+周定位，而不是主键：URL 可读且稳定。"""
     item = get_object_or_404(WeeklyProgress, year=year, week=week)
     return render(request, 'blog/progress_detail.html', {'progress': item})
-
-
-def song_list(request):
-    """每日歌曲列表，一天一首，按日期倒序。"""
-    items = DailySong.objects.all()
-    return render(request, 'blog/song_list.html', {
-        'songs': items,
-        'page_obj': _paginate(request, items, per_page=12),
-    })
 
 
 def about(request):

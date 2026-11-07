@@ -32,8 +32,6 @@ urlpatterns = [
     path('progress/', views.progress_list, name='progress_list'),
     path('progress/<int:year>-w<int:week>/', views.progress_detail, name='progress_detail'),
 
-    path('songs/', views.song_list, name='song_list'),
-
     path('rss/',LatestPostsFeed(),name='rss'),
     path('sitemap.xml',sitemap,{'sitemaps':sitemaps},name='sitemap'),
 ]

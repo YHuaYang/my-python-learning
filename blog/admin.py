@@ -5,7 +5,7 @@ admin.py 配置 Django 后台的显示方式。
 ModelAdmin 里的每一项都是「展示层」配置，不影响数据存储和校验规则。
 """
 from django.contrib import admin
-from .models import Post, Category, Tag, WeeklyProgress, Project, DailySong, Profile
+from .models import Post, Category, Tag, WeeklyProgress, Project, Profile
 
 
 @admin.register(Post)
@@ -108,33 +108,6 @@ class ProjectAdmin(admin.ModelAdmin):
     @admin.display(description='简介')
     def summary_preview(self, obj):
         return obj.summary[:30] or '（无简介）'
-
-
-@admin.register(DailySong)
-class DailySongAdmin(admin.ModelAdmin):
-    list_display = ('date', 'title', 'artist', 'has_audio', 'duration')
-    list_filter = ('artist',)
-    search_fields = ('title', 'artist', 'comment')
-    date_hierarchy = 'date'
-    ordering = ('-date',)
-    # 文件字段需要在编辑页才能上传，这里分组让表单更清楚
-    fieldsets = (
-        ('歌曲信息', {
-            'fields': ('date', 'title', 'artist'),
-        }),
-        ('媒体文件', {
-            'fields': ('cover', 'audio_file', 'duration'),
-            'description': '音频必填；时长单位是秒，留 0 表示由播放器自己读取',
-        }),
-        ('推荐语', {
-            'fields': ('comment',),
-        }),
-    )
-
-    @admin.display(description='音频', boolean=True)
-    def has_audio(self, obj):
-        # 列表页用布尔图标直观显示哪些记录还没上传音频
-        return bool(obj.audio_file)
 
 
 @admin.register(Profile)

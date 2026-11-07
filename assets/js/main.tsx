@@ -10,8 +10,6 @@ import { createRoot } from 'react-dom/client'
 import ThemeToggle from '@/components/ThemeToggle'
 
 // 每个组件工厂：接收挂载元素，读取 data-* 属性后返回要渲染的元素。
-// 用工厂而不是直接列组件，是因为不同组件的 props 各不相同，
-// 统一在这里做 dataset → props 的转换比让组件自己解析更清晰。
 type IslandFactory = (el: HTMLElement) => ReactElement | null
 
 const registry: Record<string, IslandFactory> = {
@@ -28,14 +26,15 @@ function mountIslands(): void {
 
         const factory = registry[name]
         if (!factory) {
-            // 模板写了未注册的组件名。开发时提示，线上也提示但不阻塞，
-            // 不能因为一个组件让整页交互失效
             console.warn(`[islands] 未注册的组件: ${name}`)
             return
         }
 
         const element = factory(el)
-        if (!element) return
+        if (!element) {
+            // 组件根据数据判断不需要渲染（比如没有歌单）
+            return
+        }
 
         el.dataset.reactMounted = 'true'
         createRoot(el).render(element)

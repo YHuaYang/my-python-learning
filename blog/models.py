@@ -206,35 +206,6 @@ class Project(models.Model):
         super().save(*args, **kwargs)
 
 
-class DailySong(models.Model):
-    # 一天一首，所以日期唯一。用 DateField 而非 DateTimeField：
-    # 「哪一天的歌」不需要精确到秒
-    date = models.DateField(unique=True)
-    title = models.CharField(max_length=200)
-    artist = models.CharField(max_length=100)
-
-    # 封面可选：没传时前台用默认占位图，不阻断保存
-    cover = models.ImageField(upload_to='songs/covers/', blank=True, default='')
-
-    # 音频必填（业务上）。但迁移时不能直接加非空字段，
-    # 否则 Django 会要求给已有行填一个默认值。
-    # 分两步：先 default='' 加字段，回填/确认后再改非空。
-    # 当前表为空，所以用 default='' 过渡是安全的。
-    audio_file = models.FileField(upload_to='songs/audio/', default='')
-
-    # 时长（秒）。存下来后播放器不必等音频加载完就能显示总长；
-    # 留 0 表示未知，前端会回退为读 audio.duration
-    duration = models.PositiveIntegerField(default=0, blank=True)
-
-    comment = models.TextField(blank=True, default='')
-
-    class Meta:
-        ordering = ['-date']
-
-    def __str__(self):
-        return f'{self.date} {self.title} - {self.artist}'
-
-
 class Profile(models.Model):
     # 单例模型：全局只应该有一条记录。用 OneToOneField 指向用户 +
     # save() 里强制 pk=1 双保险，避免后台误建第二条
