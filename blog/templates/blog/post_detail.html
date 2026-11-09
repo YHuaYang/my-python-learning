@@ -2,7 +2,7 @@
 {% load markdownify %}
 {% block title %}{{ post.title }} - 多于点线圈 blog{% endblock %}
 {% block content %}
-    <article class="max-w-3xl">
+    <article class="glass max-w-3xl p-6">
         <div class="flex items-center gap-3">
             <time class="text-sm text-neutral-500 dark:text-neutral-400">{{ post.published_date }}</time>
             <span class="text-sm text-neutral-400 dark:text-neutral-500">{{ post.views }} 次阅读</span>
@@ -26,6 +26,55 @@
         {% endif %}
         <div class="prose-content mt-6 leading-loose text-neutral-700 dark:text-neutral-300">{{ post.text|markdownify }}</div>
     </article>
+
+    <section class="glass mt-8 max-w-3xl p-6">
+        <div class="flex items-baseline justify-between">
+            <h2 class="text-lg font-semibold">
+                留言 ({{ guestbook_messages|length }})
+            </h2>
+            <div data-react="guestbook-toggle"
+                 data-target="guestbook-form"
+                 data-open="{% if form.errors %}true{% else %}false{% endif %}"></div>
+        </div>
+
+        {% for msg in guestbook_messages %}
+            <div class="glass-sm mt-4 p-4">
+                <div class="flex items-baseline gap-3">
+                    <span class="text-sm font-medium">{{ msg.nickname }}</span>
+                    <time class="text-xs text-neutral-400">{{ msg.created_at|date:"Y-m-d H:i" }}</time>
+                </div>
+                <p class="mt-2 text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">{{ msg.content }}</p>
+            </div>
+        {% empty %}
+            <p class="mt-4 text-sm text-neutral-500 dark:text-neutral-400">还没有留言，来写第一条吧。</p>
+        {% endfor %}
+
+        <form id="guestbook-form" method="post"
+              class="mt-8 space-y-4 {% if not form.errors %}hidden{% endif %}">
+            {% csrf_token %}
+
+            {{ form.non_field_errors }}
+
+            <div>
+                <label for="{{ form.nickname.id_for_label }}"
+                       class="mb-1 block text-sm text-neutral-600 dark:text-neutral-400">昵称</label>
+                {{ form.nickname }}
+                {{ form.nickname.errors }}
+            </div>
+
+            <div>
+                <label for="{{ form.content.id_for_label }}"
+                       class="mb-1 block text-sm text-neutral-600 dark:text-neutral-400">留言</label>
+                {{ form.content }}
+                {{ form.content.errors }}
+            </div>
+
+            <button type="submit"
+                    class="rounded bg-brand px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90">
+                发表留言
+            </button>
+        </form>
+    </section>
 
     <p class="mt-12">
         <a href="{% url 'post_list' %}" class="text-sm text-brand hover:underline">&larr; 返回列表</a>

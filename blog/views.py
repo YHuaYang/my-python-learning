@@ -11,12 +11,14 @@ views.py 处理用户请求：查数据 → 选模板 → 返回 HTML。
 """
 from datetime import date
 
-from django.shortcuts import render,get_object_or_404
-from .models import Post,Category,Tag,Project,WeeklyProgress,Profile
-from .forms import SearchForm
+from django.shortcuts import render,get_object_or_404,redirect
+from .models import Post,Category,Tag,Project,WeeklyProgress,Profile,GuestbookMessage
+from .forms import SearchForm,GuestbookForm
 from .ranking import sort_by_hot
 from django.db.models import F,Q
 from django.core.paginator import Paginator
+from django.core.cache import cache
+
 
 
 # 首页支持的排序方式与显示名。白名单制：
@@ -88,20 +90,43 @@ def post_list(request):
 
 def post_detail(request, slug):
     """文章详情页：按 slug 查单篇。"""
-    # 用 get_object_or_404 而不是 Post.objects.get()：
-    # get() 找不到会抛 DoesNotExist → 500 服务器错误；
-    # get_object_or_404 会自动转成 404 页面。
-    # 「文章不存在」是正常情况，不该表现为代码出错。
     post = get_object_or_404(
         Post.objects.select_related('category').prefetch_related('tags'),
         slug=slug,
         status='published',
     )
     Post.objects.filter(pk=post.pk).update(views=F('views') + 1)
-    # 只在内存里 +1，不用 refresh_from_db() 再查一次数据库：
-    # update() 已把新值写入库中，这里只需要让模板显示的数字对得上
     post.views += 1
-    return render(request, 'blog/post_detail.html', {"post": post})
+
+    ip = request.META.get('REMOTE_ADDR', '')
+
+    if request.method == 'POST':
+        form = GuestbookForm(request.POST)
+
+        rate_key = f'guestbook:{ip}'
+        if cache.get(rate_key, 0) >= 3:
+            form.add_error(None, '发送太频繁了，请一小时后再试')
+        elif form.is_valid():
+            obj = form.save(commit=False)
+            obj.post = post
+            obj.ip_address = ip
+            obj.save()
+            cache.set(rate_key, cache.get(rate_key, 0) + 1, 3600)
+            return redirect('post_detail', slug=post.slug)
+    else:
+        form = GuestbookForm()
+
+    guestbook_messages = GuestbookMessage.objects.filter(
+        post=post,
+        is_approved=True,
+    )
+
+    return render(request, 'blog/post_detail.html', {
+        "post": post,
+        "form": form,
+        "guestbook_messages": guestbook_messages,
+    })
+
 
 
 def category_posts(request, slug):

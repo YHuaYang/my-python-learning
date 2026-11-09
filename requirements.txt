@@ -4,3 +4,6 @@ pygments>=2.16
 python-dotenv>=1.0
 Pillow>=10.0
 whitenoise>=6.0
+# Markdown 渲染后的 HTML 清洗。选 nh3 而非 bleach：
+# bleach 已停止维护，nh3 是 Rust 实现（基于 ammonia），更快且持续更新
+nh3>=0.3

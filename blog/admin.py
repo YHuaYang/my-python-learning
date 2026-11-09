@@ -4,8 +4,8 @@ admin.py 配置 Django 后台的显示方式。
 @admin.register(Model) 装饰器等价于 admin.site.register(Model, XxxAdmin)。
 ModelAdmin 里的每一项都是「展示层」配置，不影响数据存储和校验规则。
 """
-from django.contrib import admin
-from .models import Post, Category, Tag, WeeklyProgress, Project, Profile
+from django.contrib import admin, messages
+from .models import Post, Category, Tag, WeeklyProgress, Project, Profile, GuestbookMessage
 
 
 @admin.register(Post)
@@ -120,3 +120,54 @@ class ProfileAdmin(admin.ModelAdmin):
         if Profile.objects.exists():
             return False
         return super().has_add_permission(request)
+
+
+@admin.register(GuestbookMessage)
+class GuestbookMessageAdmin(admin.ModelAdmin):
+    # 昵称和内容放前面：审核时的判断依据就是这两列
+    list_display = ('nickname', 'content_preview', 'target', 'is_approved', 'created_at')
+    # 默认筛「待审核」：打开页面就是想处理待审的，
+    # 不默认筛的话已通过的会混在里面，得自己点
+    list_filter = ('is_approved', 'created_at')
+    search_fields = ('nickname', 'content')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
+    list_per_page = 30
+    # 列表页直接勾选审核状态，比进详情页快得多
+    list_editable = ('is_approved',)
+    # IP 不展示在列表页（列太多），但编辑页要能查
+    readonly_fields = ('ip_address', 'created_at')
+    fieldsets = (
+        ('留言内容', {
+            'fields': ('nickname', 'content', 'post'),
+        }),
+        ('审核', {
+            'fields': ('is_approved',),
+        }),
+        ('系统信息', {
+            'fields': ('ip_address', 'created_at'),
+            'classes': ('collapse',),
+        }),
+    )
+    actions = ('approve_selected', 'reject_selected')
+
+    @admin.display(description='内容')
+    def content_preview(self, obj):
+        # 列表页不展示全文：200 字会把表格撑变形
+        return obj.content[:40] + ('…' if len(obj.content) > 40 else '')
+
+    @admin.display(description='所属文章')
+    def target(self, obj):
+        # post 可空，直接写 obj.post 会显示 None
+        return obj.post.title if obj.post else '（全局）'
+
+    @admin.action(description='通过选中留言')
+    def approve_selected(self, request, queryset):
+        # update() 不触发 save()，一次 SQL 搞定，比逐条 save() 快
+        count = queryset.update(is_approved=True)
+        self.message_user(request, f'已通过 {count} 条留言')
+
+    @admin.action(description='驳回选中留言')
+    def reject_selected(self, request, queryset):
+        count = queryset.update(is_approved=False)
+        self.message_user(request, f'已驳回 {count} 条留言', messages.WARNING)

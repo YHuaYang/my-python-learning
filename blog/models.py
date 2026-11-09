@@ -237,3 +237,44 @@ class Profile(models.Model):
         # 避免首页因为还没填资料就报错
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+
+class GuestbookMessage(models.Model):
+    # 留言板。本项目第一个「访客写数据」的模型，所以安全相关字段较多。
+    #
+    # post 为空 = 全局留言（留给以后的 /guestbook/ 页）；有值 = 属于某篇文章。
+    # 用 null=True 而不是 default=0：没有「第 0 篇文章」，空就是空。
+    # 代价是查询时必须显式区分 post=post 和 post__isnull=True，
+    # 漏写就会把两种留言混在一起。
+    post = models.ForeignKey(
+        Post,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name='guestbook_messages',
+        verbose_name='所属文章',
+    )
+    nickname = models.CharField(max_length=50, verbose_name='昵称')
+    # 限 200 字：留言是「给几个意见」，不是写长文。
+    # 限长同时对刷屏和超长输入做了硬性约束，不靠前端 maxlength
+    content = models.TextField(max_length=200, verbose_name='留言内容')
+
+    # 默认不通过：访客提交后前台查不到，必须在 Admin 里点通过才显示。
+    # 个人博客没有审核就等于对公众开放，垃圾留言会直接上首页
+    is_approved = models.BooleanField(default=False, verbose_name='已审核')
+
+    # 只用于限流，不展示。存在库里而不是纯缓存里，
+    # 是为了出问题时能查「哪个 IP 发了什么」
+    ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name='IP 地址')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='提交时间')
+
+    class Meta:
+        # 评论区惯例：从旧到新读下来，新留言出现在最下面
+        ordering = ['created_at']
+        verbose_name = '留言'
+        verbose_name_plural = '留言'
+
+    def __str__(self):
+        target = self.post.title if self.post else '全局'
+        return f'{self.nickname} @ {target}'
+

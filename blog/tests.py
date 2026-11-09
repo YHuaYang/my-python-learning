@@ -11,10 +11,12 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 
-from .models import Category, Post, Tag
+from .models import Category, Post, Tag, GuestbookMessage
+from .forms import GuestbookForm
 from .ranking import hot_score, sort_by_hot
 
 
@@ -367,3 +369,149 @@ class HomeSortSwitchTest(TestCase):
         """热门模式不分页，传 page 也不应报错"""
         response = self.client.get('/', {'sort': 'hot', 'page': 999})
         self.assertEqual(response.status_code, 200)
+
+
+class GuestbookTest(TestCase):
+    """留言板：审核过滤、XSS 防护、限流。
+
+    这是项目里第一个「访客写数据」的链路，最该测的三类风险：
+      1. 未审核的留言被公开（过滤条件漏写）
+      2. 访客输入被当成 HTML 执行（没转义）
+      3. 无限提交把库塞满（没限流）
+    """
+
+    def setUp(self):
+        # 每个测试都从空的限流计数开始，否则前一个测试用掉的额度
+        # 会让后一个测试莫名被判超限。LocMemCache 是进程级单例，
+        # 不清理就会跨测试残留
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+        self.user = make_user('guestbooker')
+        self.post = Post.objects.create(
+            author=self.user,
+            title='留言测试文章',
+            text='正文',
+            status='published',
+        )
+        self.url = f'/posts/{self.post.slug}/'
+
+    def _post_message(self, **kwargs):
+        """发一条留言。默认值合法，传参可覆盖任意字段。"""
+        data = {'nickname': '访客', 'content': '留言内容'}
+        data.update(kwargs)
+        return self.client.post(self.url, data)
+
+    def test_get_shows_empty_form(self):
+        """GET 请求给一个空表单，不报错"""
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.context['form'], GuestbookForm)
+        self.assertEqual(response.context['guestbook_messages'].count(), 0)
+
+    def test_valid_post_creates_unapproved_message(self):
+        """合法提交：入库、关联到文章、默认未审核、记 IP"""
+        response = self._post_message(nickname='小明', content='写得好')
+
+        # 302 而不是 200：PRG 模式，重定向防 F5 重复提交
+        self.assertEqual(response.status_code, 302)
+
+        msg = GuestbookMessage.objects.get()
+        self.assertEqual(msg.nickname, '小明')
+        self.assertEqual(msg.content, '写得好')
+        self.assertEqual(msg.post, self.post)
+        # 默认不通过，必须后台点通过才公开
+        self.assertFalse(msg.is_approved)
+        self.assertIsNotNone(msg.ip_address)
+
+    def test_unapproved_message_not_visible(self):
+        """未审核的留言即使已入库，前台也看不到"""
+        GuestbookMessage.objects.create(
+            post=self.post, nickname='待审', content='这句话不该被看到',
+        )
+        response = self.client.get(self.url)
+        self.assertNotContains(response, '这句话不该被看到')
+
+    def test_approved_message_is_visible(self):
+        """审核通过后前台可见（对照组）"""
+        GuestbookMessage.objects.create(
+            post=self.post, nickname='通过', content='这句话应该出现',
+            is_approved=True,
+        )
+        response = self.client.get(self.url)
+        self.assertContains(response, '这句话应该出现')
+
+    def test_global_message_not_on_post_page(self):
+        """post 为空的全局留言不该出现在文章页（三态外键的坑）"""
+        GuestbookMessage.objects.create(
+            post=None, nickname='全局', content='这条属于全局留言板',
+            is_approved=True,
+        )
+        response = self.client.get(self.url)
+        self.assertNotContains(response, '这条属于全局留言板')
+
+    def test_message_stored_raw_but_rendered_escaped(self):
+        """XSS：内容原样存库，但渲染时必须转义
+
+        两件事都要测。只测「页面里没有 <script>」，也可能是因为
+        内容压根没存进去；只测「库里存了原样」，又不知道渲染安不安全。
+        """
+        payload = '<script>alert(1)</script>'
+        GuestbookMessage.objects.create(
+            post=self.post, nickname='坏人', content=payload, is_approved=True,
+        )
+
+        msg = GuestbookMessage.objects.get()
+        self.assertEqual(msg.content, payload)   # 存的是原样
+
+        response = self.client.get(self.url)
+        # 原始的 <script> 不能出现在 HTML 里（否则浏览器会执行）
+        self.assertNotContains(response, payload)
+        # 转义后的版本应该出现，证明内容确实渲染了
+        self.assertContains(response, '&lt;script&gt;')
+
+    def test_empty_content_rejected(self):
+        """空内容不写库"""
+        response = self._post_message(content='')
+        self.assertEqual(response.status_code, 200)   # 重新渲染带错误
+        self.assertEqual(GuestbookMessage.objects.count(), 0)
+
+    def test_too_long_content_rejected(self):
+        """超过 200 字不写库"""
+        response = self._post_message(content='x' * 201)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(GuestbookMessage.objects.count(), 0)
+
+    def test_empty_nickname_rejected(self):
+        """昵称必填"""
+        response = self._post_message(nickname='')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(GuestbookMessage.objects.count(), 0)
+
+    def test_rate_limit_blocks_fourth_message(self):
+        """限流：同一 IP 一小时只能发 3 条"""
+        for i in range(3):
+            response = self._post_message(content=f'第 {i} 条')
+            self.assertEqual(response.status_code, 302, f'第 {i + 1} 条应成功')
+
+        self.assertEqual(GuestbookMessage.objects.count(), 3)
+
+        # 第 4 条被挡：不写库，重新渲染页面并带表单级错误
+        response = self._post_message(content='第 4 条')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(GuestbookMessage.objects.count(), 3)
+        self.assertTrue(response.context['form'].non_field_errors())
+
+    def test_rate_limit_not_charged_on_invalid_form(self):
+        """校验失败不消耗额度：否则乱提交三次就被锁了"""
+        for _ in range(5):
+            self._post_message(content='')      # 全部非法
+
+        # 额度应该还是满的，合法提交仍能成功
+        response = self._post_message(content='终于合法了')
+        self.assertEqual(response.status_code, 302)
+
+    def test_csrf_token_present_in_form(self):
+        """表单必须带 CSRF token，否则提交会被 403"""
+        response = self.client.get(self.url)
+        self.assertContains(response, 'csrfmiddlewaretoken')
