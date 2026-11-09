@@ -108,6 +108,9 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # 导航栏在 base.html 里，所有页都要，
+                # 用 context processor 注入比逐视图传更不容易漏
+                'blog.context_processors.nav',
             ],
         },
     },

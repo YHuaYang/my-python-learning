@@ -8,12 +8,42 @@
 import type { ReactElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import ThemeToggle from '@/components/ThemeToggle'
+import { GooeyNav, type GooeyNavItem } from '@/components/GooeyNav'
+import { GuestbookToggle } from '@/components/GuestbookToggle'
 
 // 每个组件工厂：接收挂载元素，读取 data-* 属性后返回要渲染的元素。
 type IslandFactory = (el: HTMLElement) => ReactElement | null
 
+/** 从 <script type="application/json"> 读数据。
+ *  导航项需要 Django 的 {% url %} 生成 href，JS 里编不出来，
+ *  所以由模板渲染成 JSON 再读。 */
+function readJsonScript<T>(id: string, fallback: T): T {
+    const node = document.getElementById(id)
+    if (!node || !node.textContent) return fallback
+    try {
+        return JSON.parse(node.textContent) as T
+    } catch {
+        console.warn(`[islands] JSON 解析失败: #${id}`)
+        return fallback
+    }
+}
+
 const registry: Record<string, IslandFactory> = {
     'theme-toggle': () => <ThemeToggle />,
+
+    'gooey-nav': (el) => {
+        const items = readJsonScript<GooeyNavItem[]>('nav-items', [])
+        if (items.length === 0) return null
+        // 当前路径由 Django 的 request.path 传入，用于高亮
+        return <GooeyNav items={items} path={el.dataset.path ?? ''} size="sm" />
+    },
+
+    'guestbook-toggle': (el) => (
+        <GuestbookToggle
+            targetId={el.dataset.target ?? ''}
+            initialOpen={el.dataset.open === 'true'}
+        />
+    ),
 }
 
 function mountIslands(): void {
