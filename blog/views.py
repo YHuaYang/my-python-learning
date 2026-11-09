@@ -103,19 +103,35 @@ def post_detail(request, slug):
     if request.method == 'POST':
         form = GuestbookForm(request.POST)
 
+        # 限流先于校验：被限流的人不该再看到字段错误，否则提示混乱
         rate_key = f'guestbook:{ip}'
         if cache.get(rate_key, 0) >= 3:
+            # 用表单级错误而不是返回 429：
+            # 直接 429 会让页面变成白屏错误页，用户看不到已有留言
             form.add_error(None, '发送太频繁了，请一小时后再试')
         elif form.is_valid():
+            # commit=False 拿到对象但不入库，用来补两个表单里没有的字段。
+            # post 不补就会是 NULL，留言会变成全局留言，文章页看不到；
+            # ip_address 不补就无法追溯到具体来源
             obj = form.save(commit=False)
             obj.post = post
             obj.ip_address = ip
             obj.save()
+            # 计数放在 save() 之后：校验失败不该消耗额度，
+            # 否则用户空提交三次就被锁了
             cache.set(rate_key, cache.get(rate_key, 0) + 1, 3600)
+            # PRG（Post/Redirect/Get）：成功后必须重定向，
+            # 否则用户按 F5 会重复提交同一份表单
             return redirect('post_detail', slug=post.slug)
+        # 校验失败时什么都不做：form 带着错误往下流到 render
     else:
         form = GuestbookForm()
 
+    # post 与 is_approved 两个条件缺一不可：
+    # 漏 post 会把所有文章的留言混在一起；
+    # 漏 is_approved 会让未审核的留言直接公开。
+    # 不能用 post.guestbook_messages.all()：那是 related_name 反查，
+    # 拿到的是全部留言，包含未审核的
     guestbook_messages = GuestbookMessage.objects.filter(
         post=post,
         is_approved=True,
