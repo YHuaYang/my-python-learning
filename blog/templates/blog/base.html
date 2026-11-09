@@ -22,20 +22,16 @@
         <link rel="alternate" type="application/rss+xml" title="RSS" href="{% url 'rss' %}">
         <title>{% block title %}多于点线圈-blog{% endblock %}</title>
     </head>
-    <body class="min-h-screen flex flex-col bg-white text-neutral-800 font-sans antialiased dark:bg-neutral-900 dark:text-neutral-200">
-        <header class="sticky top-0 z-10 border-b border-neutral-200 bg-white/95 backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95">
+    <body class="min-h-screen flex flex-col font-sans antialiased text-neutral-800 dark:text-neutral-200">
+        <header class="sticky top-0 z-10 border-b border-white/40 dark:border-white/10 glass !rounded-none border-x-0 border-t-0">
             <div class="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
                 <a href="{% url 'post_list' %}" class="text-lg font-semibold text-brand hover:text-brand-dark">
                     多于点线圈
                 </a>
-                <nav class="flex items-center gap-1 text-sm">
-                    <a href="{% url 'post_list' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">首页</a>
-                    <a href="{% url 'projects' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">项目</a>
-                    <a href="{% url 'progress_list' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">进度</a>
-                    <a href="{% url 'search' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">搜索</a>
-                    <a href="{% url 'about' %}" class="rounded px-3 py-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800">关于</a>
+                <div class="flex items-center gap-2">
+                    <div data-react="gooey-nav" data-path="{{ request.path }}"></div>
                     <div data-react="theme-toggle" class="ml-1"></div>
-                </nav>
+                </div>
             </div>
         </header>
 
@@ -43,15 +39,16 @@
             {% block content %}{% endblock %}
         </main>
 
-        <footer class="border-t border-neutral-200 py-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+        <footer class="glass !rounded-none border-x-0 border-b-0 py-6 text-center text-sm text-neutral-600 dark:text-neutral-300">
             <p>&copy; 2026 多于点线圈</p>
             <p class="mt-2">
                 <a href="{% url 'rss' %}" class="hover:text-brand">RSS 订阅</a>
-                <span class="mx-2 text-neutral-300 dark:text-neutral-600">|</span>
+                <span class="mx-2 text-neutral-400 dark:text-neutral-500">|</span>
                 <a href="{% url 'sitemap' %}" class="hover:text-brand">Sitemap</a>
             </p>
         </footer>
 
+        {{ nav_items|json_script:"nav-items" }}
         <script type="module" src="{% static 'js/bundle.js' %}"></script>
     </body>
 </html>

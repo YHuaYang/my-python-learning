@@ -46,6 +46,133 @@
  * Tailwind 的 preflight 会把 h2/ul/table 等标签的默认样式全部清零，
  * 所以 Markdown 渲染出来的标题、列表、引用、代码块都需要在这里补回。 */
 @layer components {
+    /* 全站背景图 + 可读性遮罩。
+     *
+     * 图片放在 blog/static/img/bg-day.jpg 与 bg-night.jpg。
+     * 若文件不存在，浏览器忽略这条规则，下方兜底底色仍然生效，
+     * 不会出现白底闪一下。
+     *
+     * 为什么用 fixed 而不是给 body 直接设背景：
+     * body 背景会随文档高度平铺；页面很长时图片被拉成纵向重复。
+     * 用 ::before 固定到视口，图片始终是一个完整梯度，不重复。
+     *
+     * 遮罩的 18% / 72% 两段透明度是按「能看清背景是云，
+     * 但正文对比度足够」调的：完全透明图片会抢文字，
+     * 完全不透明又失了意义。
+     */
+    body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background-image: url('../img/bg-day.jpg');
+        background-size: cover;
+        background-position: center top;
+        background-repeat: no-repeat;
+        /* 图片没加载出来时的兜底渐变，避免纯白 */
+        background-color: #eef2f7;
+    }
+
+    /* 白天：从上到下逐渐变淡，让文字密集的区域（下方）更干净。
+     * 顶部保留更多图片细节（只髤 8%），给页面一个“天空”的开头；
+     * 越往下遮罩越重，因为下半部分卡片密集，需要更强的对比基底。 */
+    body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background: linear-gradient(
+            to bottom,
+            rgba(255, 255, 255, 0.08) 0%,
+            rgba(255, 255, 255, 0.42) 40%,
+            rgba(255, 255, 255, 0.62) 100%
+        );
+        pointer-events: none;
+    }
+
+    /* 暗色模式换图并加深遮罩：深色底上的正文需要更强的压暗 */
+    .dark body::before {
+        background-image: url('../img/bg-night.jpg');
+        background-color: #0b1020;
+    }
+
+    .dark body::after {
+        background: linear-gradient(
+            to bottom,
+            rgba(11, 16, 32, 0.15) 0%,
+            rgba(11, 16, 32, 0.55) 40%,
+            rgba(11, 16, 32, 0.75) 100%
+        );
+    }
+
+    /* 玻璃卡片：半透明 + 磨砂。
+     *
+     * backdrop-blur 需要元素本身是半透明的才能看到后面的模糊背景。
+     * 0.72 是「能看出背后有云，但内容不被干扰」的平衡点；
+     * 暗色模式降到 0.55 因为深色本身压得住，可以更透一点显得轻盈。
+     *
+     * saturate(140%) 是为了抵消模糊带来的发灰：
+     * 高斯模糊会混合周围颜色，不补饱和度卡片会显得脏。
+     */
+    .glass {
+        @apply rounded-xl border;
+        background-color: rgb(255 255 255 / 0.72);
+        border-color: rgb(255 255 255 / 0.6);
+        /* 这里必须写完整的 backdrop-filter，不能只靠 @apply backdrop-blur-xl。
+         * Tailwind v4 的 backdrop-blur 写的是 --tw-backdrop-blur 变量，
+         * 如果有其他规则同时设置了 backdrop-filter，变量就不被引用，
+         * 计算结果变成 none。直接写死模糊值最稳。
+         * saturate(140%) 抵消高斯模糊带来的发灰。
+         *
+         * 注意：两个属性分别写在不同规则里，因为 Lightning CSS 压缩时
+         * 会把同一声明块里重复的 -webkit-* 与标准属性合并，
+         * 只保留前缀版（它以为兼容性够）。用 @supports 分开写能让两者都留下。 */
+        -webkit-backdrop-filter: blur(16px) saturate(140%);
+        backdrop-filter: blur(16px) saturate(140%);
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px rgb(0 0 0 / 0.06);
+    }
+
+    .dark .glass {
+        background-color: rgb(23 23 23 / 0.55);
+        border-color: rgb(255 255 255 / 0.1);
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.4);
+    }
+
+    /* 轻量玻璃：用于列表项这类重复很多的小块，
+     * 模糊半径和阴影都减弱，避免页面上几十个元素同时 backdrop-filter 拖垮滚动性能 */
+    .glass-sm {
+        @apply rounded-lg border;
+        background-color: rgb(255 255 255 / 0.62);
+        border-color: rgb(0 0 0 / 0.06);
+        /* 轻量版只给很弱的模糊：首页一屏有十几个卡片，
+         * 每个都开大半径 backdrop-filter 会让滚动掉帧 */
+        -webkit-backdrop-filter: blur(8px) saturate(120%);
+        backdrop-filter: blur(8px) saturate(120%);
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.03);
+    }
+
+    .dark .glass-sm {
+        background-color: rgb(38 38 38 / 0.5);
+        border-color: rgb(255 255 255 / 0.08);
+    }
+
+    /* 支持磨砂的设备才用 backdrop-filter；
+     * 旧浏览器上退回不透明背景，否则半透明叠在半透明上一样看不清字 */
+    @supports not (backdrop-filter: blur(1px)) {
+        .glass {
+            background-color: rgb(255 255 255 / 0.94);
+        }
+        .dark .glass {
+            background-color: rgb(23 23 23 / 0.94);
+        }
+        .glass-sm {
+            background-color: rgb(255 255 255 / 0.92);
+        }
+        .dark .glass-sm {
+            background-color: rgb(38 38 38 / 0.92);
+        }
+    }
+
     .prose-content {
         max-width: 72ch;
     }

@@ -1,7 +1,7 @@
 {% extends "blog/base.html" %}
 {% block title %}关于我 - 多于点线圈 blog{% endblock %}
 {% block content %}
-    <div class="max-w-3xl">
+    <div class="glass max-w-3xl p-6">
         <h1 class="text-2xl font-bold">关于我</h1>
 
         {% if profile.nickname %}
@@ -13,7 +13,7 @@
                 <div class="min-w-0">
                     <p class="text-lg font-semibold">{{ profile.nickname }}</p>
                     {% if profile.tagline %}
-                        <p class="mt-1 text-neutral-600 dark:text-neutral-400">{{ profile.tagline }}</p>
+                        <p class="mt-1 text-neutral-600 dark:text-neutral-300">{{ profile.tagline }}</p>
                     {% endif %}
                 </div>
             </div>
@@ -24,8 +24,8 @@
         </div>
 
         {% if profile.email or profile.github_url or profile.social_links %}
-            <div class="mt-8 border-t border-neutral-200 pt-6 dark:border-neutral-700">
-                <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-400">联系方式</h2>
+            <div class="mt-8 border-t border-neutral-300/60 pt-6 dark:border-neutral-600/60">
+                <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">联系方式</h2>
                 <ul class="mt-3 space-y-1.5 text-sm">
                     {% if profile.email %}
                         <li>邮箱：<a href="mailto:{{ profile.email }}" class="text-brand hover:underline">{{ profile.email }}</a></li>

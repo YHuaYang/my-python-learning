@@ -2,11 +2,11 @@
 {% load markdownify %}
 {% block title %}{{ project.name }} - 多于点线圈 blog{% endblock %}
 {% block content %}
-    <article class="max-w-3xl">
+    <article class="glass max-w-3xl p-6">
         <h1 class="text-3xl font-bold leading-tight">{{ project.name }}</h1>
 
         {% if project.summary %}
-            <p class="mt-3 text-lg leading-relaxed text-neutral-600 dark:text-neutral-400">{{ project.summary }}</p>
+            <p class="mt-3 text-lg leading-relaxed text-neutral-600 dark:text-neutral-300">{{ project.summary }}</p>
         {% endif %}
 
         {% if project.tech_stack %}

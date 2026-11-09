@@ -17,8 +17,8 @@
     </form>
 
     {% if keyword %}
-        <p class="mt-8 text-sm text-neutral-500 dark:text-neutral-400">
-            「<span class="font-medium text-neutral-700 dark:text-neutral-200">{{ keyword }}</span>」
+        <p class="mt-8 text-sm text-neutral-600 dark:text-neutral-300">
+            「<span class="font-medium text-neutral-800 dark:text-neutral-100">{{ keyword }}</span>」
             {% if posts %}共找到 {{ posts|length }} 篇{% else %}没有找到相关文章{% endif %}
         </p>
 
@@ -27,12 +27,12 @@
                 {% include "blog/_posts.html" %}
             </div>
         {% else %}
-            <div class="mt-6 rounded-lg border border-dashed border-neutral-300 p-8 text-center text-neutral-500 dark:border-neutral-600 dark:text-neutral-400">
+            <div class="glass-sm mt-6 border-dashed p-8 text-center text-neutral-500 dark:text-neutral-400">
                 <p>换个关键词试试，比如文章标题里的词。</p>
             </div>
         {% endif %}
     {% else %}
-        <div class="mt-8 rounded-lg border border-dashed border-neutral-300 p-8 text-center text-neutral-500 dark:border-neutral-600 dark:text-neutral-400">
+        <div class="glass-sm mt-8 border-dashed p-8 text-center text-neutral-500 dark:text-neutral-400">
             <p>输入关键词搜索文章的标题和正文。</p>
         </div>
     {% endif %}

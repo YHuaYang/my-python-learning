@@ -1,7 +1,7 @@
 {% if featured_projects %}
-    <section class="rounded-xl border border-neutral-200 p-5 dark:border-neutral-700">
+    <section class="glass p-5">
         <div class="flex items-baseline justify-between">
-            <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-400">项目精选</h2>
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">项目精选</h2>
             <a href="{% url 'projects' %}" class="text-xs text-brand hover:underline">全部 &rarr;</a>
         </div>
         <ul class="mt-3 space-y-3">
@@ -15,7 +15,7 @@
                         {% endif %}
                     </div>
                     {% if project.summary %}
-                        <p class="mt-0.5 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{{ project.summary|truncatechars:50 }}</p>
+                        <p class="mt-0.5 text-xs leading-relaxed text-neutral-600 dark:text-neutral-300">{{ project.summary|truncatechars:50 }}</p>
                     {% endif %}
                 </li>
             {% endfor %}

@@ -1,11 +1,11 @@
 {% if latest_progress %}
-    <section class="rounded-xl border border-neutral-200 p-5 dark:border-neutral-700">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-400">本周学习进度</h2>
+    <section class="glass p-5">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">本周学习进度</h2>
         <a href="{% url 'progress_detail' latest_progress.year latest_progress.week %}"
            class="mt-3 block hover:text-brand">
             <p class="text-base font-semibold">{{ latest_progress }}</p>
             {% if latest_progress.summary %}
-                <p class="mt-1 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">{{ latest_progress.summary }}</p>
+                <p class="mt-1 text-sm leading-relaxed text-neutral-600 dark:text-neutral-300">{{ latest_progress.summary }}</p>
             {% endif %}
         </a>
         <a href="{% url 'progress_list' %}"
