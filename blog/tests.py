@@ -295,6 +295,76 @@ class FeedAndSitemapTest(TestCase):
         self.assertIn('RSS', footer)
 
 
+class AdminLocalizationTest(TestCase):
+    """后台界面全中文，且不泄漏模板注释。
+
+    两类问题的根源不同：
+    1. 模型与字段名默认取 Python 标识符，需要显式 verbose_name
+    2. unfold 不自带 locale，它的 {% trans %} 在中文环境下
+       找不到翻译，原样输出英文。靠项目级 LOCALE_PATHS 解决
+    """
+
+    def setUp(self):
+        self.user = make_user('adminviewer')
+        # 必须同时是 staff 与 superuser：
+        # is_staff 只决定「能不能登录后台」，
+        # 具体模型页还需要 has_perm 检查，缺权限会返回 403 而不是登录页。
+        # 测试关心的是文案与模板，为权限专门去配 Permission 对象不值得
+        self.user.is_staff = True
+        self.user.is_superuser = True
+        self.user.save(update_fields=['is_staff', 'is_superuser'])
+        self.client.force_login(self.user)
+        self.post = Post.objects.create(
+            author=self.user, title='后台测试文章', text='x', status='published',
+        )
+
+    def test_no_template_comment_leak(self):
+        """多行 {# ... #} 会被原样输出到 HTML，必须用 {% comment %}
+
+        这是本项目的已知坑：AGENTS.md 记过 {# #} 只支持单行。
+        """
+        for path in ('/admin/', '/admin/blog/post/'):
+            html = self.client.get(path).content.decode()
+            self.assertNotIn('{#', html, msg=path)
+            self.assertNotIn('#}', html, msg=path)
+
+    def test_unfold_strings_translated(self):
+        """unfold 的界面文案应被我们的语言包翻成中文"""
+        from django.utils import translation
+        from django.utils.translation import gettext
+
+        with translation.override('zh-hans'):
+            for msgid, expected in (
+                ('Type to search', '输入以搜索'),
+                ('Select', '选择'),
+                ('Apply Filters', '应用筛选'),
+                ('Recent actions', '最近操作'),
+            ):
+                self.assertEqual(gettext(msgid), expected, msgid)
+
+    def test_search_placeholder_is_chinese(self):
+        """搜索栏 placeholder 不能是英文"""
+        html = self.client.get('/admin/blog/post/').content.decode()
+        self.assertIn('输入以搜索', html)
+        self.assertNotIn('Type to search', html)
+
+    def test_model_labels_are_chinese(self):
+        """模型与字段的 verbose_name 应全部中文
+
+        判据：非 'ID' 且是纯 ASCII 且有字母 = 没设 verbose_name，
+        Django 用了字段名本身。
+        """
+        from django.apps import apps
+
+        english = []
+        for model in apps.get_app_config('blog').get_models():
+            for f in model._meta.fields:
+                vn = str(f.verbose_name)
+                if vn != 'ID' and vn.isascii() and any(c.isalpha() for c in vn):
+                    english.append(f'{model.__name__}.{f.name}={vn!r}')
+        self.assertEqual(english, [], f'仍有英文字段标签: {english}')
+
+
 class HomePostLimitTest(TestCase):
     """首页只展示最新 6 篇，其余进归档。"""
 

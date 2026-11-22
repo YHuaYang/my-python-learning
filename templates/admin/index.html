@@ -9,9 +9,11 @@
 {% endblock %}
 
 {% block content %}
-    {# 图表用的档位高度类。写在模板内而不是交给 Tailwind 构建：
-       Admin 加载的是 unfold 自带的 CSS 产物，里面没有我们
-       临时算出的任意值类，自己写死最稳。各 11 档（0-10）。 #}
+    {% comment %}
+    图表用的档位高度类。写在模板内而不是交给 Tailwind 构建：
+    Admin 加载的是 unfold 自带的 CSS 产物，里面没有我们临时
+    算出的任意值类，自己写死最稳。各 11 档（0-10）。
+    {% endcomment %}
     <style>
         .bar-0 { height: 0%; }
         .bar-1 { height: 10%; }

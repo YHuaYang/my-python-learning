@@ -210,6 +210,18 @@ USE_I18N = True
 
 USE_TZ = True
 
+# 项目级的翻译文件目录。
+#
+# 为什么需要它：django-unfold 不带任何 locale 目录，
+# 但它的模板里大量用 {% trans %}。在中文环境下找不到翻译，
+# 就原样输出英文（搜索框显示 "Type to search"、
+# 按钮显示 "Select"），造成中英混杂。
+#
+# 放在项目级而不是改 site-packages：升级 unfold 时不会被覆盖，
+# 而且 LOCALE_PATHS 的优先级高于所有 app。
+# 翻译内容见 locale/zh_Hans/LC_MESSAGES/django.po。
+LOCALE_PATHS = [BASE_DIR / 'locale']
+
 # django.contrib.sites：sitemap 用它拼绝对 URL。
 # 只有一个站点，固定用 SITE_ID = 1，对应 admin 里 Sites 那一条记录。
 SITE_ID = 1
