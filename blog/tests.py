@@ -14,11 +14,21 @@ from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 
+from .dashboard import dashboard_context
 from .forms import GuestbookForm
-from .models import Category, GuestbookMessage, Post, Profile, Project, Tag
+from .models import (
+    Category,
+    GuestbookMessage,
+    Post,
+    Profile,
+    Project,
+    Tag,
+    VisitLog,
+)
 
 
 def make_user(username):
@@ -662,5 +672,172 @@ class ProjectCoverTest(TestCase):
         self.project.refresh_from_db()
         if self.project.cover:
             self.project.cover.delete(save=False)
+
+
+class VisitLoggingTest(TestCase):
+    """访问统计：记录什么、不记录什么。
+
+    中间件的过滤规则是这张表的生命线。漏记只是数据少，
+    多记会让统计完全失真（自己看页面、爬虫扫描都会算进访客）。
+    """
+
+    DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    MOBILE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile'
+
+    def setUp(self):
+        self.user = make_user('visitor')
+
+    def test_records_anonymous_get(self):
+        """匿名访问前台会写入一条记录"""
+        self.client.get('/', HTTP_USER_AGENT=self.DESKTOP_UA)
+        self.assertEqual(VisitLog.objects.count(), 1)
+        log = VisitLog.objects.get()
+        self.assertEqual(log.path, '/')
+        self.assertEqual(log.device, 'desktop')
+
+    def test_detects_mobile(self):
+        self.client.get('/', HTTP_USER_AGENT=self.MOBILE_UA)
+        self.assertEqual(VisitLog.objects.get().device, 'mobile')
+
+    def test_ignores_logged_in_user(self):
+        """已登录用户（站主自己）不记录，否则趋势图变成自己的访问日志"""
+        self.client.force_login(self.user)
+        self.client.get('/', HTTP_USER_AGENT=self.DESKTOP_UA)
+        self.assertEqual(VisitLog.objects.count(), 0)
+
+    def test_ignores_bots(self):
+        """爬虫 UA 不记录"""
+        self.client.get('/', HTTP_USER_AGENT='Googlebot/2.1 (+http://www.google.com/bot.html)')
+        self.assertEqual(VisitLog.objects.count(), 0)
+
+    def test_ignores_admin_path(self):
+        self.client.get('/admin/', HTTP_USER_AGENT=self.DESKTOP_UA)
+        self.assertEqual(VisitLog.objects.count(), 0)
+
+    def test_ignores_static_and_media(self):
+        self.client.get('/static/css/tailwind.css', HTTP_USER_AGENT=self.DESKTOP_UA)
+        self.client.get('/media/x.png', HTTP_USER_AGENT=self.DESKTOP_UA)
+        self.assertEqual(VisitLog.objects.count(), 0)
+
+    def test_ignores_non_2xx(self):
+        """404 不记录：扫描器试探不该算进访问量"""
+        self.client.get('/no-such-page/', HTTP_USER_AGENT=self.DESKTOP_UA)
+        self.assertEqual(VisitLog.objects.count(), 0)
+
+    def test_ignores_post(self):
+        """只统计 GET；POST 是表单提交，不是浏览"""
+        post = Post.objects.create(
+            author=self.user, title='留言测试', text='x', status='published',
+        )
+        self.client.post(
+            f'/posts/{post.slug}/',
+            {'nickname': 'a', 'content': 'b'},
+            HTTP_USER_AGENT=self.DESKTOP_UA,
+        )
+        # 重定向后客户端不会再自动发 GET，所以只应有 0 条
+        self.assertEqual(VisitLog.objects.count(), 0)
+
+    def test_strips_query_string(self):
+        """query string 不计入 path，/x/?a=1 与 /x/?b=2 归为同一页"""
+        self.client.get('/?sort=hot', HTTP_USER_AGENT=self.DESKTOP_UA)
+        self.assertEqual(VisitLog.objects.get().path, '/')
+
+    def test_external_referer_recorded(self):
+        self.client.get(
+            '/',
+            HTTP_USER_AGENT=self.DESKTOP_UA,
+            HTTP_REFERER='https://www.google.com/search?q=django',
+        )
+        self.assertEqual(VisitLog.objects.get().referer_host, 'www.google.com')
+
+    def test_same_site_referer_ignored(self):
+        """同站跳转不算外部来路"""
+        self.client.get(
+            '/',
+            HTTP_USER_AGENT=self.DESKTOP_UA,
+            HTTP_REFERER='http://testserver/projects/',
+        )
+        self.assertEqual(VisitLog.objects.get().referer_host, '')
+
+
+class DashboardTest(TestCase):
+    """后台仪表盘的统计逻辑与渲染。"""
+
+    def setUp(self):
+        self.user = make_user('dashboarder')
+        # Admin 只允许 is_staff 用户访问。
+        # make_user 用 create_user 建的是普通用户，
+        # 不升级的话 /admin/ 会 302 到登录页（测试里表现为断言失败）
+        self.user.is_staff = True
+        self.user.save(update_fields=['is_staff'])
+        self.client.force_login(self.user)
+
+    def test_dashboard_renders(self):
+        self.assertContains(self.client.get('/admin/'), '近 7 天访问趋势')
+
+    def test_dashboard_shows_real_counts(self):
+        """卡片数字来自真实数据，不是估算或占位"""
+        Post.objects.create(
+            author=self.user, title='A', text='x', status='published',
+        )
+        ctx = dashboard_context()
+        self.assertEqual(ctx['overview']['posts_total'], 1)
+        self.assertEqual(ctx['overview']['posts_published'], 1)
+
+    def test_trend_has_seven_days_even_without_visits(self):
+        """没访问也要补齐 7 天，否则折线图会缺日连成直线"""
+        ctx = dashboard_context()
+        self.assertEqual(len(ctx['trend']['days']), 7)
+        self.assertEqual(ctx['trend']['total_visits'], 0)
+        # 分母为 0 时峰值为 1，避免柱高算成 0/0
+        self.assertEqual(ctx['trend']['max_count'], 1)
+
+    def test_trend_counts_visits(self):
+        VisitLog.objects.create(path='/', device='desktop')
+        VisitLog.objects.create(path='/about/', device='mobile')
+        ctx = dashboard_context()
+        self.assertEqual(ctx['trend']['total_visits'], 2)
+        self.assertEqual(ctx['top_pages'][0]['count'], 1)
+
+    def test_device_distribution(self):
+        VisitLog.objects.create(path='/', device='mobile')
+        VisitLog.objects.create(path='/', device='mobile')
+        VisitLog.objects.create(path='/', device='desktop')
+        devices = {d['key']: d for d in dashboard_context()['trend']['devices']}
+        self.assertEqual(devices['mobile']['count'], 2)
+        self.assertEqual(devices['desktop']['count'], 1)
+
+    def test_old_visits_excluded_from_trend(self):
+        """超出 7 天窗口的记录不进趋势图"""
+        old = VisitLog.objects.create(path='/', device='desktop')
+        VisitLog.objects.filter(pk=old.pk).update(
+            created_at=timezone.now() - timedelta(days=30)
+        )
+        self.assertEqual(dashboard_context()['trend']['total_visits'], 0)
+
+
+class PruneVisitsCommandTest(TestCase):
+    """清理命令：只删超期的，不碰近期数据。"""
+
+    def setUp(self):
+        self.fresh = VisitLog.objects.create(path='/new', device='desktop')
+        self.stale = VisitLog.objects.create(path='/old', device='desktop')
+        VisitLog.objects.filter(pk=self.stale.pk).update(
+            created_at=timezone.now() - timedelta(days=200)
+        )
+
+    def test_deletes_only_expired(self):
+        call_command('prune_visits', '--days', '90', verbosity=0)
+        self.assertEqual(VisitLog.objects.count(), 1)
+        self.assertTrue(VisitLog.objects.filter(pk=self.fresh.pk).exists())
+
+    def test_dry_run_deletes_nothing(self):
+        call_command('prune_visits', '--days', '90', '--dry-run', verbosity=0)
+        self.assertEqual(VisitLog.objects.count(), 2)
+
+    def test_keeps_everything_when_all_fresh(self):
+        VisitLog.objects.filter(pk=self.stale.pk).update(created_at=timezone.now())
+        call_command('prune_visits', '--days', '90', verbosity=0)
+        self.assertEqual(VisitLog.objects.count(), 2)
 
 

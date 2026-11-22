@@ -340,3 +340,72 @@ class GuestbookMessage(models.Model):
         target = self.post.title if self.post else '全局'
         return f'{self.nickname} @ {target}'
 
+
+class VisitLog(models.Model):
+    """一条访问记录，每次前台请求写一行。
+
+    为什么不用外部统计（Umami / GA）：
+    那些数据存在别人的服务器上，而本项目想在自己的 Admin 里看。
+
+    为什么不存 IP：用户明确要求不记录。代价是没有 UV
+    （无法区分「一人访五次」和「五人各访一次」），
+    但 PV、设备占比、热门页面、来路这些都不需要 IP 也能统计。
+
+    为什么不用单独的汇总表：
+    先把原始记录存下来，图表靠聚合查询算。
+    数据量小（个人博客，存 90 天），没必要提前汇总；
+    等真的慢了再加缓存或汇总表。
+    """
+
+    # 不含 query string：统计热门页面时 /posts/x/?from=xx 应归到同一页。
+    # 长度 255 足够容纳本项目最长路径（slug 允许中文）
+    path = models.CharField(max_length=255, verbose_name='路径')
+
+    # 只存「手机 / 电脑 / 平板 / 未知」四个值，不存完整 UA。
+    # 完整 UA 动辄 150 字节且对统计无用；分类信息在中间件里就解析完。
+    # 用 choices 而不是自由文本，避免以后手写值不一致
+    DEVICE_CHOICES = [
+        ('mobile', '手机'),
+        ('tablet', '平板'),
+        ('desktop', '电脑'),
+        ('unknown', '未知'),
+    ]
+    device = models.CharField(
+        max_length=10,
+        choices=DEVICE_CHOICES,
+        default='unknown',
+        verbose_name='设备类型',
+    )
+
+    # 来源域名。只存 host 不存完整 URL：
+    # 完整 URL 可能带搜索关键词等隐私信息，且统计只需要知道「从哪来」。
+    # 空串 = 直接访问（无 Referer 或同站跳转）
+    referer_host = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        verbose_name='来源域名',
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name='访问时间',
+    )
+
+    class Meta:
+        verbose_name = '访问记录'
+        verbose_name_plural = '访问记录'
+        # 默认按时间倒序：Admin 里看最新访问
+        ordering = ['-created_at']
+        # 图表按天聚合时全靠这个索引；不加的话
+        # 存了几个月后每天查询都要全表扫描
+        indexes = [
+            models.Index(fields=['created_at', 'path'], name='visit_time_path_idx'),
+            models.Index(fields=['created_at', 'device'], name='visit_time_device_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.path} @ {self.created_at:%Y-%m-%d %H:%M}'
+
+

@@ -7,7 +7,17 @@ ModelAdmin 里的每一项都是「展示层」配置，不影响数据存储和
 from django.contrib import admin, messages
 from django.utils.html import format_html
 
-from .models import Category, GuestbookMessage, Post, Profile, Project, Tag, WeeklyProgress
+from .dashboard import dashboard_context
+from .models import (
+    Category,
+    GuestbookMessage,
+    Post,
+    Profile,
+    Project,
+    Tag,
+    VisitLog,
+    WeeklyProgress,
+)
 
 
 @admin.register(Post)
@@ -243,3 +253,61 @@ class GuestbookMessageAdmin(admin.ModelAdmin):
     def reject_selected(self, request, queryset):
         count = queryset.update(is_approved=False)
         self.message_user(request, f'已驳回 {count} 条留言', messages.WARNING)
+
+
+@admin.register(VisitLog)
+class VisitLogAdmin(admin.ModelAdmin):
+    """只读的访问记录。
+
+    不提供新增/修改：数据由中间件自动产生，
+    手动改记录只会让统计失真。
+    但允许删除：清理扒虫扫出来的垃圾记录时有用。
+    """
+
+    list_display = ('created_at', 'path', 'device', 'referer_host')
+    list_filter = ('device', 'created_at')
+    search_fields = ('path', 'referer_host')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
+    list_per_page = 50
+
+    # 全字段只读：数据由中间件写入，后台不给改
+    readonly_fields = ('path', 'device', 'referer_host', 'created_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        # 不允许修改，但 allow 查看视图
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return True
+
+    # 保留删除权限：清理异常数据时用
+    def has_delete_permission(self, request, obj=None):
+        return True
+
+
+# 后台首页仪表盘。
+#
+# 为什么去改编 admin.site.index 而不是写一个独立视图：
+# 这样不用改 URL（仍是 /admin/），也不用改动项目的路由配置。
+# 保留原方法作为兜底：一旦取数据失败，后台仍能正常打开。
+_original_index = admin.site.index
+
+
+def custom_index(request, extra_context=None):
+    ctx = dict(extra_context or {})
+    try:
+        ctx['dashboard'] = dashboard_context()
+    except Exception:
+        # 统计出错不能把后台弄成 500。
+        # 模板里有 {% if dashboard %} 分支，拿不到数据时会
+        # 退回 unfold 默认应用列表。
+        ctx['dashboard'] = None
+    return _original_index(request, ctx)
+
+
+admin.site.index = custom_index
+

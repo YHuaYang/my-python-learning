@@ -7,3 +7,6 @@ whitenoise>=6.0
 # Markdown 渲染后的 HTML 清洗。选 nh3 而非 bleach：
 # bleach 已停止维护，nh3 是 Rust 实现（基于 ammonia），更快且持续更新
 nh3>=0.3
+# Admin 主题。必须在 INSTALLED_APPS 里排在 django.contrib.admin 之前
+# 才会生效（它靠覆盖 admin 的模板与静态文件工作）
+django-unfold>=0.110

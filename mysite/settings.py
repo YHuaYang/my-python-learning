@@ -70,6 +70,12 @@ ALLOWED_HOSTS = [
 # Application definition
 
 INSTALLED_APPS = [
+    # unfold 必须在 django.contrib.admin 之前：
+    # 它靠覆盖 admin 的模板与静态文件生效，顺序反了就不生效
+    'unfold',
+    # unfold 的两个子 app：提供筛选面板与内联标签页
+    'unfold.contrib.filters',
+    'unfold.contrib.forms',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -94,14 +100,58 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # 访问统计放最后：
+    # 前面几个中间件都可能早退（ Session / Auth / Message），
+    # 放最后能保证只在请求真的走到视图时才记录。
+    # 它内部还会过滤 admin、静态资源、已登录用户与爬虫
+    'blog.middleware.VisitLoggingMiddleware',
 ]
+
+# unfold 的外观配置。
+# 只改颜色与标题，不动任何模型配置。
+UNFOLD = {
+    'SITE_TITLE': '多于点线圈',
+    'SITE_HEADER': '内容管理',
+    'SITE_SUBHEADER': '文章、项目、进度与留言',
+    # 与前台一致的品牌橙
+    'COLORS': {
+        'primary': {
+            '50': '255 247 237',
+            '100': '255 237 213',
+            '200': '254 215 170',
+            '300': '253 186 116',
+            '400': '251 146 60',
+            '500': '194 81 0',
+            '600': '163 68 0',
+            '700': '124 45 18',
+            '800': '92 33 13',
+            '900': '67 20 7',
+            '950': '33 10 3',
+        },
+    },
+    # 侧边栏图标（ Heroicons 名称）
+    'SIDEBAR': {
+        'show_search': True,
+        'show_all_applications': False,
+    },
+}
 
 ROOT_URLCONF = 'mysite.urls'
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        # 项目级模板目录。它比所有 app 自带的 templates/ 优先：
+        #
+        # 为什么需要它：unfold 的 INSTALLED_APPS 位置必须在
+        # django.contrib.admin 之前（否则它的模板覆盖不生效），
+        # 于是 unfold 也排在了 blog 之前。结果是
+        # blog/templates/admin/index.html 永远抢不过
+        # unfold 自带的那份，自定义仪表盘不会显示。
+        #
+        # 把目录写进 DIRS 就能提到所有 app 之前，
+        # 而这个目录只放 admin/ 下的覆盖模板，不影响前台。
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
