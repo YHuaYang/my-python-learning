@@ -6,8 +6,8 @@
 
         {% if profile.nickname %}
             <div class="mt-6 flex items-start gap-5">
-                {% if profile.avatar_url %}
-                    <img src="{{ profile.avatar_url }}" alt="{{ profile.nickname }}"
+                {% if profile.avatar_src %}
+                    <img src="{{ profile.avatar_src }}" alt="{{ profile.nickname }}"
                          class="h-20 w-20 shrink-0 rounded-full object-cover">
                 {% endif %}
                 <div class="min-w-0">

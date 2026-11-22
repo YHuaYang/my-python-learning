@@ -210,7 +210,26 @@ class Profile(models.Model):
     # 单例模型：全局只应该有一条记录。用 OneToOneField 指向用户 +
     # save() 里强制 pk=1 双保险，避免后台误建第二条
     nickname = models.CharField(max_length=50)
-    avatar_url = models.URLField(blank=True, default='')
+
+    # 头像两种来源，优先用上传的文件：
+    # avatar 是本地图（推荐），avatar_url 留着兼容外链头像。
+    # 用 ImageField 而不是 FileField：前者会校验确实是图片，
+    # 避免有人传个 .jpg 后缀的脚本上去。
+    # blank=True 与 default='' 配对：没传时存空字符串而不是 NULL，
+    # 模板里 {% if profile.avatar %} 能直接判断
+    avatar = models.ImageField(
+        upload_to='avatars/',
+        blank=True,
+        default='',
+        verbose_name='头像（上传）',
+        help_text='上传后优先生效；留空则用下面的外链地址',
+    )
+    avatar_url = models.URLField(
+        blank=True,
+        default='',
+        verbose_name='头像（外链）',
+        help_text='仅在没上传头像时使用',
+    )
     tagline = models.CharField(max_length=120, blank=True, default='')
     email = models.EmailField(blank=True, default='')
     github_url = models.URLField(blank=True, default='')
@@ -225,6 +244,22 @@ class Profile(models.Model):
 
     def __str__(self):
         return self.nickname
+
+    @property
+    def avatar_src(self):
+        """模板里统一用这个取头像地址。
+
+        上传的图优先，其次外链，都没有则返回空字符串，
+        模板靠 {% if profile.avatar_src %} 判断是否渲染 <img>，
+        否则会显示一个破图框。
+
+        用属性而不是模板里写 if/else 两层：
+        头像在两个模板（首页侧栏、关于页）都要用，
+        逻辑写一处才不会两处走偏。
+        """
+        if self.avatar:
+            return self.avatar.url
+        return self.avatar_url
 
     def save(self, *args, **kwargs):
         # 强制主键为 1：无论新建多少次，都只会覆盖同一条记录

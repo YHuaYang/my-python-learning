@@ -5,7 +5,9 @@ admin.py 配置 Django 后台的显示方式。
 ModelAdmin 里的每一项都是「展示层」配置，不影响数据存储和校验规则。
 """
 from django.contrib import admin, messages
-from .models import Post, Category, Tag, WeeklyProgress, Project, Profile, GuestbookMessage
+from django.utils.html import format_html
+
+from .models import Category, GuestbookMessage, Post, Profile, Project, Tag, WeeklyProgress
 
 
 @admin.register(Post)
@@ -112,7 +114,46 @@ class ProjectAdmin(admin.ModelAdmin):
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ('nickname', 'tagline', 'email', 'updated_date')
+    list_display = ('nickname', 'avatar_preview', 'tagline', 'email', 'updated_date')
+    # 单例模型，只有一条记录，不需要搜索和筛选
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('nickname', 'tagline'),
+        }),
+        ('头像', {
+            'fields': ('avatar', 'avatar_preview_large', 'avatar_url'),
+            'description': '两个都填时，上传的图片优先生效。'
+                           '上传后保存即可看到预览，不需要先去前台确认。',
+        }),
+        ('联系方式', {
+            'fields': ('email', 'github_url', 'social_links'),
+        }),
+    )
+    # 预览图不能在保存后手动改，否则会误导
+    readonly_fields = ('avatar_preview_large',)
+
+    @admin.display(description='头像')
+    def avatar_preview(self, obj):
+        """列表页的小缩略图。"""
+        src = obj.avatar_src if obj else ''
+        if not src:
+            return '（未设置）'
+        return format_html(
+            '<img src="{}" style="height:32px;width:32px;border-radius:50%;object-fit:cover;">',
+            src,
+        )
+
+    @admin.display(description='当前头像')
+    def avatar_preview_large(self, obj):
+        """编辑页的大预览，方便确认上传结果。"""
+        src = obj.avatar_src if obj else ''
+        if not src:
+            return '（还没上传头像）'
+        return format_html(
+            '<img src="{}" style="height:96px;width:96px;border-radius:50%;'
+            'object-fit:cover;border:1px solid #ddd;">',
+            src,
+        )
 
     def has_add_permission(self, request):
         # 单例模型：已经存在一条时不再允许「新增」，
