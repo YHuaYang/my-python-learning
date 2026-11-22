@@ -4,6 +4,8 @@ admin.py 配置 Django 后台的显示方式。
 @admin.register(Model) 装饰器等价于 admin.site.register(Model, XxxAdmin)。
 ModelAdmin 里的每一项都是「展示层」配置，不影响数据存储和校验规则。
 """
+import logging
+
 from django.contrib import admin, messages
 from django.utils.html import format_html
 
@@ -18,6 +20,8 @@ from .models import (
     VisitLog,
     WeeklyProgress,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @admin.register(Post)
@@ -299,12 +303,14 @@ _original_index = admin.site.index
 
 def custom_index(request, extra_context=None):
     ctx = dict(extra_context or {})
+    # ruff 的 BLE001 建议不要捕裸 Exception，这里是故意的：
+    # 仪表盘只是附加信息，任何统计查询出错（索引缺失、字段改名、
+    # 数据库锁）都不该让整个后台变成 500——那样连修数据都进不去。
+    # 捕大例外并记日志，是这里唯一正确的选择。
     try:
         ctx['dashboard'] = dashboard_context()
     except Exception:
-        # 统计出错不能把后台弄成 500。
-        # 模板里有 {% if dashboard %} 分支，拿不到数据时会
-        # 退回 unfold 默认应用列表。
+        logger.exception('仪表盘统计失败，退回默认首页')
         ctx['dashboard'] = None
     return _original_index(request, ctx)
 

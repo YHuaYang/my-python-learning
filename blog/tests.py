@@ -20,15 +20,7 @@ from django.utils import timezone
 
 from .dashboard import dashboard_context
 from .forms import GuestbookForm
-from .models import (
-    Category,
-    GuestbookMessage,
-    Post,
-    Profile,
-    Project,
-    Tag,
-    VisitLog,
-)
+from .models import Category, GuestbookMessage, Post, Profile, Project, Tag, VisitLog
 
 
 def make_user(username):

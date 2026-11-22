@@ -12,9 +12,9 @@ Admin 读它生成表单，ORM 读它生成 SQL。改模型等于改数据库结
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
-from django.urls import reverse
 
 
 class Category(models.Model):
@@ -27,14 +27,20 @@ class Category(models.Model):
         ('周报', '周报'),
     ]
 
-    name = models.CharField(max_length=50, unique=True)
-    slug = models.SlugField(max_length=50, unique=True, allow_unicode=True)
-    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='日报')
+    name = models.CharField(max_length=50, unique=True, verbose_name='名称')
+    slug = models.SlugField(
+        max_length=50, unique=True, allow_unicode=True, verbose_name='URL 标识',
+        help_text='留空时根据名称自动生成',
+    )
+    type = models.CharField(
+        max_length=20, choices=TYPE_CHOICES, default='日报', verbose_name='分类类型',
+    )
 
     class Meta:
-        # Django 默认把类名加 s 作为复数名，Category 会变成 "Categorys"（拼错），
-        # 后台显示的模型名就是这个复数形式，所以必须手动指定
-        verbose_name_plural = 'categories'
+        # 中文单复数相同，不用写 s。
+        # 不指定的话后台会显示类名「Category」而不是「分类」
+        verbose_name = '分类'
+        verbose_name_plural = '分类'
         # 查询和后台默认按名称排序，不用每次写 order_by
         ordering = ['name']
 
@@ -54,10 +60,15 @@ class Category(models.Model):
 
 
 class Tag(models.Model):
-    name = models.CharField(max_length=30, unique=True)
-    slug = models.SlugField(max_length=30, unique=True, allow_unicode=True)
+    name = models.CharField(max_length=30, unique=True, verbose_name='名称')
+    slug = models.SlugField(
+        max_length=30, unique=True, allow_unicode=True, verbose_name='URL 标识',
+        help_text='留空时根据名称自动生成',
+    )
 
     class Meta:
+        verbose_name = '标签'
+        verbose_name_plural = '标签'
         ordering = ['name']
 
     def __str__(self):
@@ -84,35 +95,56 @@ class Post(models.Model):
         max_length=10,
         choices=STATUS_CHOICES,
         default='draft',
+        verbose_name='状态',
+        help_text='只有「已发布」会出现在前台',
     )
     # settings.AUTH_USER_MODEL 是字符串形式的用户模型引用（默认 'auth.User'）。
     # 不直接 import User，是为了以后换成自定义用户模型时不用改代码。
     # CASCADE：作者被删除时，他名下的文章一并删除。
-    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    title = models.CharField(max_length=200)
-    text = models.TextField()
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='作者',
+    )
+    title = models.CharField(max_length=200, verbose_name='标题')
+    text = models.TextField(verbose_name='正文', help_text='支持 Markdown')
     # 摘要：用空字符串而不是 NULL。字符串字段一律不写 null=True，
     # 否则「NULL」和「''」两种空值并存，查询时要同时判断两种情况。
-    excerpt= models.TextField(blank=True,default='')
+    excerpt = models.TextField(
+        blank=True, default='', verbose_name='摘要',
+        help_text='留空时前台自动截取正文前 100 字',
+    )
     # SET_NULL 与 null=True 必须配对：删除分类时把文章的 category_id 置 NULL，
     # 文章本身保留（若写 CASCADE，删分类会连同文章一起消失）。
     # related_name='posts' 让反向查询写成 category.posts.all()
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True,blank=True,related_name='posts')
+    category = models.ForeignKey(
+        Category, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='posts', verbose_name='分类',
+    )
     # 多对多：一篇可有多个标签，一个标签属于多篇文章。
     # 多对多不需要 on_delete —— 关联数据存在自动生成的中间表 blog_post_tags，
     # 删除标签只是断开关联行，两边的实体表都不受影响。
-    tags = models.ManyToManyField(Tag, blank=True,related_name='posts')
+    tags = models.ManyToManyField(Tag, blank=True, related_name='posts', verbose_name='标签')
     # 四个参数各管一件事：
     #   unique        —— 保证 URL 唯一，两篇文章不能共用同一个 slug
     #   allow_unicode —— 允许中文 slug（默认只保留 ASCII）
     #   blank         —— 表单校验允许留空，后台可以不填
     #   default=''    —— 初始值为空字符串，让 save() 里能判断「未填写」
-    slug = models.SlugField(max_length=200, unique=True,allow_unicode=True,blank=True,default='')
-    created_date = models.DateTimeField(default=timezone.now)
+    slug = models.SlugField(
+        max_length=200, unique=True, allow_unicode=True, blank=True, default='',
+        verbose_name='URL 标识',
+        help_text='留空时根据标题自动生成；重名会自动追加 -2、-3',
+    )
+    created_date = models.DateTimeField(default=timezone.now, verbose_name='创建时间')
     # published_date 只记录发布时刻，用于显示和排序；
     # 前台是否可见由上面的 status 决定。
-    published_date = models.DateTimeField(blank=True, null=True)
-    views = models.PositiveIntegerField(default=0, editable=False)
+    published_date = models.DateTimeField(
+        blank=True, null=True, verbose_name='发布时间',
+        help_text='留空时，状态改为已发布会自动填入当前时间',
+    )
+    views = models.PositiveIntegerField(default=0, editable=False, verbose_name='阅读数')
+
+    class Meta:
+        verbose_name = '文章'
+        verbose_name_plural = '文章'
 
     def publish(self):
         # 把草稿转成已发布：改状态、补发布时间（有就不覆盖），再保存
@@ -154,38 +186,59 @@ class WeeklyProgress(models.Model):
     # ISO 年。不是日历年：2026-12-31 可能属于 2027 年第 1 周，
     # 所以录入时用 date.isocalendar()[0]，不要用 date.year
     year = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(2000), MaxValueValidator(2100)]
+        validators=[MinValueValidator(2000), MaxValueValidator(2100)],
+        verbose_name='年份',
+        help_text='ISO 年（date.isocalendar()[0]），不一定等于日历年',
     )
     # ISO 周，1-53，用 date.isocalendar()[1] 获取
     week = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(53)]
+        validators=[MinValueValidator(1), MaxValueValidator(53)],
+        verbose_name='第几周',
+        help_text='1-53，与年份组合唯一',
     )
     # 一句话摘要，首页卡片用。正文截断不好控制，所以单独存一列短文本
-    summary = models.CharField(max_length=120, blank=True, default='')
+    summary = models.CharField(
+        max_length=120, blank=True, default='', verbose_name='摘要',
+    )
     # 详情页正文：小标题自己写（本周目标/完成项/总结/下周计划），
     # 模型不强制四段都存在，否则每周会被逼着填满四个框
-    content = models.TextField(blank=True, default='')
-    published_date = models.DateTimeField(default=timezone.now)
+    content = models.TextField(
+        blank=True, default='', verbose_name='正文',
+        help_text='支持 Markdown；小标题自拟，不强制分段',
+    )
+    published_date = models.DateTimeField(default=timezone.now, verbose_name='发布时间')
 
     class Meta:
         # 同一组 (年, 周) 只能有一条，避免重复记录同一周
         unique_together = [('year', 'week')]
         ordering = ['-year', '-week']
-        # 默认会变成 "weekly progresss"（拼错），必须手动指定
-        verbose_name_plural = 'weekly progresses'
+        verbose_name = '周进度'
+        verbose_name_plural = '周进度'
 
     def __str__(self):
         return f'{self.year} 年第 {self.week} 周'
 
 
 class Project(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-    slug = models.SlugField(max_length=100, unique=True, allow_unicode=True, blank=True, default='')
-    summary = models.CharField(max_length=200, blank=True, default='')
-    description = models.TextField(blank=True, default='')
+    name = models.CharField(max_length=100, unique=True, verbose_name='项目名称')
+    slug = models.SlugField(
+        max_length=100, unique=True, allow_unicode=True, blank=True, default='',
+        verbose_name='URL 标识',
+        help_text='留空时根据项目名称自动生成',
+    )
+    summary = models.CharField(
+        max_length=200, blank=True, default='', verbose_name='简介',
+        help_text='列表卡片上显示，建议 50 字以内',
+    )
+    description = models.TextField(
+        blank=True, default='', verbose_name='详细说明', help_text='支持 Markdown',
+    )
     # 技术栈用逗号分隔的纯文本，不单独建表：
     # 它只用于展示，没有筛选/统计需求，JSON 字段或关系表都属过度设计
-    tech_stack = models.CharField(max_length=200, blank=True, default='')
+    tech_stack = models.CharField(
+        max_length=200, blank=True, default='', verbose_name='技术栈',
+        help_text='逗号分隔，例如：Django, Tailwind, SQLite',
+    )
 
     # 项目封面图。可选：没传时前台用技术栈文字占位，不阻断展示。
     # 用 ImageField 而非 FileField，让 Pillow 真的验证是图片。
@@ -199,14 +252,22 @@ class Project(models.Model):
         help_text='建议 16:9 横向图，宽度 800px 以上',
     )
 
-    github_url = models.URLField(blank=True, default='')
-    demo_url = models.URLField(blank=True, default='')
+    github_url = models.URLField(
+        blank=True, default='', verbose_name='GitHub 地址',
+    )
+    demo_url = models.URLField(
+        blank=True, default='', verbose_name='在线演示地址',
+    )
     # 手控排序：数字小的在前面。没有这个字段就只好按创建时间排，不受控
-    sort_order = models.IntegerField(default=0)
-    created_date = models.DateTimeField(default=timezone.now)
+    sort_order = models.IntegerField(
+        default=0, verbose_name='排序', help_text='数字小的排在前面',
+    )
+    created_date = models.DateTimeField(default=timezone.now, verbose_name='创建时间')
 
     class Meta:
         ordering = ['sort_order', '-created_date']
+        verbose_name = '项目'
+        verbose_name_plural = '项目'
 
     def __str__(self):
         return self.name
@@ -236,7 +297,7 @@ class Project(models.Model):
 class Profile(models.Model):
     # 单例模型：全局只应该有一条记录。用 OneToOneField 指向用户 +
     # save() 里强制 pk=1 双保险，避免后台误建第二条
-    nickname = models.CharField(max_length=50)
+    nickname = models.CharField(max_length=50, verbose_name='昵称')
 
     # 头像两种来源，优先用上传的文件：
     # avatar 是本地图（推荐），avatar_url 留着兼容外链头像。
@@ -257,17 +318,24 @@ class Profile(models.Model):
         verbose_name='头像（外链）',
         help_text='仅在没上传头像时使用',
     )
-    tagline = models.CharField(max_length=120, blank=True, default='')
-    email = models.EmailField(blank=True, default='')
-    github_url = models.URLField(blank=True, default='')
+
+    tagline = models.CharField(
+        max_length=120, blank=True, default='', verbose_name='一句话介绍',
+        help_text='显示在头像下方',
+    )
+    email = models.EmailField(blank=True, default='', verbose_name='邮箱')
+    github_url = models.URLField(
+        blank=True, default='', verbose_name='GitHub 地址',
+    )
     social_links = models.TextField(
-        blank=True, default='',
+        blank=True, default='', verbose_name='其他链接',
         help_text='一行一个，格式：平台名 URL',
     )
-    updated_date = models.DateTimeField(auto_now=True)
+    updated_date = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
     class Meta:
-        verbose_name_plural = 'profiles'
+        verbose_name = '个人资料'
+        verbose_name_plural = '个人资料'
 
     def __str__(self):
         return self.nickname

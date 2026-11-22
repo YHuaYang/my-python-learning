@@ -1,5 +1,6 @@
 from django import forms
-from .models import Post,GuestbookMessage
+
+from .models import GuestbookMessage
 
 
 class SearchForm(forms.Form):

@@ -4,9 +4,8 @@ views.py 处理用户请求：查数据 → 选模板 → 返回 HTML。
 每个视图函数接收一个 request（Django 传进来的请求对象），
 必须返回一个 HttpResponse（render() 就是快捷方式之一）。
 
-全局约定：所有对外展示文章的查询都必须加
-    published_date__lte=timezone.now()
-否则草稿（published_date 为 NULL）会被直接访问到。
+全局约定：所有对外展示文章的查询都必须加 status='published'，
+否则草稿会被直接访问到。
 筛选条件「列表里过滤了、详情里忘了过滤」是内容站最常见的越权漏洞。
 """
 from django.core.cache import cache
@@ -24,7 +23,6 @@ from .models import (
     Tag,
     WeeklyProgress,
 )
-
 
 # 首页只展示最新 N 篇，超出部分进归档页。
 # 用篇数而不是天数：写作频率不稳时，天数窗口会让首页时而有内容、

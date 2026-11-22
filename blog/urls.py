@@ -1,11 +1,12 @@
 """
 urls.py 是路由表，它决定了去views.py调用哪些函数去处理
 """
-from django.urls import path
 from django.contrib.sitemaps.views import sitemap
-from .feeds import LatestPostsFeed
-from .sitemaps import PostSitemap,StaticViewSitemap
+from django.urls import path
+
 from . import views
+from .feeds import LatestPostsFeed
+from .sitemaps import PostSitemap, StaticViewSitemap
 
 sitemaps={
     'posts': PostSitemap,
