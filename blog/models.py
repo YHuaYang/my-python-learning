@@ -30,7 +30,7 @@ class Category(models.Model):
     name = models.CharField(max_length=50, unique=True, verbose_name='名称')
     slug = models.SlugField(
         max_length=50, unique=True, allow_unicode=True, verbose_name='URL 标识',
-        help_text='留空时根据名称自动生成',
+        help_text='不填会自动生成，一般不用管',
     )
     type = models.CharField(
         max_length=20, choices=TYPE_CHOICES, default='日报', verbose_name='分类类型',
@@ -63,7 +63,7 @@ class Tag(models.Model):
     name = models.CharField(max_length=30, unique=True, verbose_name='名称')
     slug = models.SlugField(
         max_length=30, unique=True, allow_unicode=True, verbose_name='URL 标识',
-        help_text='留空时根据名称自动生成',
+        help_text='不填会自动生成，一般不用管',
     )
 
     class Meta:
@@ -105,12 +105,12 @@ class Post(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='作者',
     )
     title = models.CharField(max_length=200, verbose_name='标题')
-    text = models.TextField(verbose_name='正文', help_text='支持 Markdown')
+    text = models.TextField(verbose_name='正文', help_text='可以用 Markdown')
     # 摘要：用空字符串而不是 NULL。字符串字段一律不写 null=True，
     # 否则「NULL」和「''」两种空值并存，查询时要同时判断两种情况。
     excerpt = models.TextField(
         blank=True, default='', verbose_name='摘要',
-        help_text='留空时前台自动截取正文前 100 字',
+        help_text='不填会自动截取正文开头，一般不用管',
     )
     # SET_NULL 与 null=True 必须配对：删除分类时把文章的 category_id 置 NULL，
     # 文章本身保留（若写 CASCADE，删分类会连同文章一起消失）。
@@ -131,14 +131,14 @@ class Post(models.Model):
     slug = models.SlugField(
         max_length=200, unique=True, allow_unicode=True, blank=True, default='',
         verbose_name='URL 标识',
-        help_text='留空时根据标题自动生成；重名会自动追加 -2、-3',
+        help_text='不填会自动生成，一般不用管',
     )
     created_date = models.DateTimeField(default=timezone.now, verbose_name='创建时间')
     # published_date 只记录发布时刻，用于显示和排序；
     # 前台是否可见由上面的 status 决定。
     published_date = models.DateTimeField(
         blank=True, null=True, verbose_name='发布时间',
-        help_text='留空时，状态改为已发布会自动填入当前时间',
+        help_text='不填，改为已发布会自动填上当前时间',
     )
     views = models.PositiveIntegerField(default=0, editable=False, verbose_name='阅读数')
 
@@ -188,13 +188,13 @@ class WeeklyProgress(models.Model):
     year = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(2000), MaxValueValidator(2100)],
         verbose_name='年份',
-        help_text='ISO 年（date.isocalendar()[0]），不一定等于日历年',
+        help_text='按 ISO 年算，年初年末可能和日历年不一致',
     )
     # ISO 周，1-53，用 date.isocalendar()[1] 获取
     week = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(53)],
         verbose_name='第几周',
-        help_text='1-53，与年份组合唯一',
+        help_text='1-53',
     )
     # 一句话摘要，首页卡片用。正文截断不好控制，所以单独存一列短文本
     summary = models.CharField(
@@ -204,7 +204,7 @@ class WeeklyProgress(models.Model):
     # 模型不强制四段都存在，否则每周会被逼着填满四个框
     content = models.TextField(
         blank=True, default='', verbose_name='正文',
-        help_text='支持 Markdown；小标题自拟，不强制分段',
+        help_text='可以用 Markdown，小标题自拟',
     )
     published_date = models.DateTimeField(default=timezone.now, verbose_name='发布时间')
 
@@ -224,20 +224,20 @@ class Project(models.Model):
     slug = models.SlugField(
         max_length=100, unique=True, allow_unicode=True, blank=True, default='',
         verbose_name='URL 标识',
-        help_text='留空时根据项目名称自动生成',
+        help_text='不填会自动生成，一般不用管',
     )
     summary = models.CharField(
         max_length=200, blank=True, default='', verbose_name='简介',
-        help_text='列表卡片上显示，建议 50 字以内',
+        help_text='显示在列表卡片上，短一点更好',
     )
     description = models.TextField(
-        blank=True, default='', verbose_name='详细说明', help_text='支持 Markdown',
+        blank=True, default='', verbose_name='详细说明', help_text='可以用 Markdown',
     )
     # 技术栈用逗号分隔的纯文本，不单独建表：
     # 它只用于展示，没有筛选/统计需求，JSON 字段或关系表都属过度设计
     tech_stack = models.CharField(
         max_length=200, blank=True, default='', verbose_name='技术栈',
-        help_text='逗号分隔，例如：Django, Tailwind, SQLite',
+        help_text='用逗号隔开',
     )
 
     # 项目封面图。可选：没传时前台用技术栈文字占位，不阻断展示。
@@ -249,7 +249,7 @@ class Project(models.Model):
         blank=True,
         default='',
         verbose_name='封面图',
-        help_text='建议 16:9 横向图，宽度 800px 以上',
+        # 不写尺寸提示：分组说明里已经写了，重复会显示两遍
     )
 
     github_url = models.URLField(
@@ -260,7 +260,7 @@ class Project(models.Model):
     )
     # 手控排序：数字小的在前面。没有这个字段就只好按创建时间排，不受控
     sort_order = models.IntegerField(
-        default=0, verbose_name='排序', help_text='数字小的排在前面',
+        default=0, verbose_name='排序', help_text='数字越小越靠前',
     )
     created_date = models.DateTimeField(default=timezone.now, verbose_name='创建时间')
 
@@ -310,18 +310,17 @@ class Profile(models.Model):
         blank=True,
         default='',
         verbose_name='头像（上传）',
-        help_text='上传后优先生效；留空则用下面的外链地址',
+        # 不写优先级说明：分组说明里已经写了，重复会显示两遍
     )
     avatar_url = models.URLField(
         blank=True,
         default='',
         verbose_name='头像（外链）',
-        help_text='仅在没上传头像时使用',
+        help_text='上传了头像就不用填这个',
     )
 
     tagline = models.CharField(
         max_length=120, blank=True, default='', verbose_name='一句话介绍',
-        help_text='显示在头像下方',
     )
     email = models.EmailField(blank=True, default='', verbose_name='邮箱')
     github_url = models.URLField(
@@ -329,7 +328,7 @@ class Profile(models.Model):
     )
     social_links = models.TextField(
         blank=True, default='', verbose_name='其他链接',
-        help_text='一行一个，格式：平台名 URL',
+        help_text='一行一个',
     )
     updated_date = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 

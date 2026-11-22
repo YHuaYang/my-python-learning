@@ -59,8 +59,8 @@ class PostAdmin(UnfoldModelAdmin):
        fieldsets = (
            ('状态', {
                'fields': ('status',),
-               'description': '下架或隐藏文章请改这里：选「草稿」或「已下架」。'
-                              '不要用清空发布时间的方式，那样不会从前台消失。',
+               'description': '想从前台藏起一篇文章，把状态改成草稿或归档。'
+                              '清空发布时间没用，它不会从前台消失。',
            }),
            ('内容', {
                'fields': ('title', 'slug', 'category', 'tags', 'author', 'excerpt', 'text')
@@ -99,8 +99,8 @@ class WeeklyProgressAdmin(UnfoldModelAdmin):
         ('周期', {
             'fields': ('year', 'week'),
             # 组顶部的说明文字，提醒自己 ISO 周的两个坑
-            'description': 'ISO 标准：用 date(2026,10,25).isocalendar() 确认，'
-                           '注意 ISO 年不等于日历年',
+            'description': '按 ISO 周算，所以年初年末可能和日历年不一致。'
+                           '不确定时用 Python 查：date(2026,10,25).isocalendar()',
         }),
         ('内容', {
             'fields': ('summary', 'content'),
@@ -129,8 +129,7 @@ class ProjectAdmin(UnfoldModelAdmin):
         }),
         ('封面图', {
             'fields': ('cover', 'cover_preview_large'),
-            'description': '建议 16:9 横向图，宽度 800px 以上。'
-                           '留空时前台只显示文字，不会出破图。',
+            'description': '横图更好看，建议 16:9。传了会在列表和详情页显示；不传就只有文字。',
         }),
         ('详细内容', {
             'fields': ('description',),
@@ -179,8 +178,7 @@ class ProfileAdmin(UnfoldModelAdmin):
         }),
         ('头像', {
             'fields': ('avatar', 'avatar_preview_large', 'avatar_url'),
-            'description': '两个都填时，上传的图片优先生效。'
-                           '上传后保存即可看到预览，不需要先去前台确认。',
+            'description': '两个都填时用上传的图。上传后保存就能看到预览。',
         }),
         ('联系方式', {
             'fields': ('email', 'github_url', 'social_links'),
