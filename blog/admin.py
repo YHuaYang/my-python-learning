@@ -8,6 +8,7 @@ import logging
 
 from django.contrib import admin, messages
 from django.utils.html import format_html
+from unfold.admin import ModelAdmin as UnfoldModelAdmin
 
 from .dashboard import dashboard_context
 from .models import (
@@ -23,9 +24,20 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+# 为什么要有这一行别名：
+#
+# unfold 提供了自己的 ModelAdmin 基类，它在渲染表单时
+# 会给输入框、下拉框、文件选择器加上 Tailwind 样式类。
+# 如果继承 django.contrib.admin.ModelAdmin，虽然页面布局、
+# 侧边栏、按钮会变成 unfold 外观（那些在模板与 CSS 里），
+# 但表单控件拿不到样式类，表现为「输入框像纯文本、
+# 看不出哪里能填、哪里是按钮」。
+#
+# 下面所有 Admin 类都必须继承 UnfoldModelAdmin 而不是 admin.ModelAdmin。
+
 
 @admin.register(Post)
-class PostAdmin(admin.ModelAdmin):
+class PostAdmin(UnfoldModelAdmin):
        # 列表页显示的列。写字段名时 Django 会显示该值的 __str__，
        # 所以 'author' 显示的是用户名（User.__str__ 返回 username）
        list_display = ('title', 'slug', 'status', 'author', 'category', 'published_date', 'views')
@@ -61,7 +73,7 @@ class PostAdmin(admin.ModelAdmin):
 
 
 @admin.register(Category)
-class CategoryAdmin(admin.ModelAdmin):
+class CategoryAdmin(UnfoldModelAdmin):
        list_display = ('name','slug','type')
        list_filter = ('type',)
        search_fields = ('name',)
@@ -69,14 +81,14 @@ class CategoryAdmin(admin.ModelAdmin):
 
 
 @admin.register(Tag)
-class TagAdmin(admin.ModelAdmin):
+class TagAdmin(UnfoldModelAdmin):
     list_display = ('name','slug')
     search_fields = ('name',)
     prepopulated_fields = {'slug':('name',)}
 
 
 @admin.register(WeeklyProgress)
-class WeeklyProgressAdmin(admin.ModelAdmin):
+class WeeklyProgressAdmin(UnfoldModelAdmin):
     # __str__ 会渲染成「2026 年第 43 周」
     list_display = ('__str__', 'summary_preview', 'published_date')
     list_filter = ('year',)
@@ -104,7 +116,7 @@ class WeeklyProgressAdmin(admin.ModelAdmin):
 
 
 @admin.register(Project)
-class ProjectAdmin(admin.ModelAdmin):
+class ProjectAdmin(UnfoldModelAdmin):
     list_display = ('name', 'cover_preview', 'slug', 'summary_preview', 'sort_order', 'created_date')
     search_fields = ('name', 'summary', 'description')
     prepopulated_fields = {'slug': ('name',)}
@@ -158,7 +170,7 @@ class ProjectAdmin(admin.ModelAdmin):
 
 
 @admin.register(Profile)
-class ProfileAdmin(admin.ModelAdmin):
+class ProfileAdmin(UnfoldModelAdmin):
     list_display = ('nickname', 'avatar_preview', 'tagline', 'email', 'updated_date')
     # 单例模型，只有一条记录，不需要搜索和筛选
     fieldsets = (
@@ -209,7 +221,7 @@ class ProfileAdmin(admin.ModelAdmin):
 
 
 @admin.register(GuestbookMessage)
-class GuestbookMessageAdmin(admin.ModelAdmin):
+class GuestbookMessageAdmin(UnfoldModelAdmin):
     # 昵称和内容放前面：审核时的判断依据就是这两列
     list_display = ('nickname', 'content_preview', 'target', 'is_approved', 'created_at')
     # 默认筛「待审核」：打开页面就是想处理待审的，
@@ -260,7 +272,7 @@ class GuestbookMessageAdmin(admin.ModelAdmin):
 
 
 @admin.register(VisitLog)
-class VisitLogAdmin(admin.ModelAdmin):
+class VisitLogAdmin(UnfoldModelAdmin):
     """只读的访问记录。
 
     不提供新增/修改：数据由中间件自动产生，
@@ -316,4 +328,37 @@ def custom_index(request, extra_context=None):
 
 
 admin.site.index = custom_index
+
+
+# ===== 给 django.contrib 自带的 Admin 换 unfold 基类 =====
+#
+# User / Group / Site 的 Admin 写在 django.contrib 包内部，
+# 继承的是原生 admin.ModelAdmin，所以它们的编辑页输入框
+# 拿不到 unfold 的样式类（表现为无边框、与纯文本难区分）。
+#
+# 做法：先 unregister，再用「原 Admin + Unfold ModelAdmin」多继承重新注册。
+# 多继承顺序很重要：原 Admin 在前，它的 fieldsets / 表单布局优先；
+# UnfoldModelAdmin 在后，只贡献样式与模板钩子。
+#
+# User 不一起改：UserAdmin 带密码修改、权限穿梭框等大量自定义布局，
+# 多继承容易产生 MRO 冲突。而本站只有一个用户（站主自己），
+# 改用户频率极低，不值得为它承担后台坏掉的风险。
+from django.contrib.auth.admin import GroupAdmin  # noqa: E402
+from django.contrib.auth.models import Group  # noqa: E402
+from django.contrib.sites.admin import SiteAdmin  # noqa: E402
+from django.contrib.sites.models import Site  # noqa: E402
+
+admin.site.unregister(Group)
+admin.site.unregister(Site)
+
+
+@admin.register(Group)
+class UnfoldGroupAdmin(GroupAdmin, UnfoldModelAdmin):
+    """用户组。继承原 GroupAdmin 保留其布局，再加 unfold 样式。"""
+
+
+@admin.register(Site)
+class UnfoldSiteAdmin(SiteAdmin, UnfoldModelAdmin):
+    """站点。domain 决定 sitemap 与 robots.txt 里的绝对地址，
+    上线后要在这里改成真实域名。"""
 

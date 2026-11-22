@@ -364,6 +364,43 @@ class AdminLocalizationTest(TestCase):
                     english.append(f'{model.__name__}.{f.name}={vn!r}')
         self.assertEqual(english, [], f'仍有英文字段标签: {english}')
 
+    def test_admin_uses_unfold_base_class(self):
+        """所有 Admin 必须继承 unfold 的 ModelAdmin。
+
+        漏了会怎样：页面布局、侧边栏、按钮仍是 unfold 外观
+       （那些在模板与 CSS 里），但表单控件拿不到样式类，
+        表现为「输入框无边框、与纯文本难区分、看不出哪里能填」。
+        这个 bug 不易从代码看出来，只能靠测试或看页面发现。
+        """
+        from django.contrib import admin
+
+        bad = []
+        for model, obj in admin.site._registry.items():
+            # Site 已换成 UnfoldSiteAdmin；User 是有意保留原生基类
+            # （UserAdmin 带密码与权限穿梭框的自定义布局，
+            #   多继承容易产生 MRO 冲突，而本站只有一个用户）
+            if model._meta.label == 'auth.User':
+                continue
+            if not any('unfold' in b.__module__ for b in type(obj).__mro__):
+                bad.append(model._meta.label)
+
+        self.assertEqual(bad, [], f'这些 Admin 未使用 unfold 基类: {bad}')
+
+    def test_admin_form_inputs_have_styles(self):
+        """编辑页的文本输入框应带 unfold 的 Tailwind 样式类
+
+        之前的 bug：继承了 django.contrib.admin.ModelAdmin，
+        输入框只有 Django 原生的 vTextField（无边框），
+        截图上看就像一段普通文字。
+        """
+        html = self.client.get(
+            f'/admin/blog/post/{self.post.pk}/change/'
+        ).content.decode()
+        # unfold 给输入框加的样式类里一定有这个组合
+        self.assertIn('border border-base-200', html)
+        # 标题字段不能只剩原生 class
+        self.assertNotRegex(html, r'name="title"[^>]*class="vTextField"')
+
 
 class HomePostLimitTest(TestCase):
     """首页只展示最新 6 篇，其余进归档。"""
