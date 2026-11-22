@@ -18,7 +18,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from .forms import GuestbookForm
-from .models import Category, GuestbookMessage, Post, Profile, Tag
+from .models import Category, GuestbookMessage, Post, Profile, Project, Tag
 
 
 def make_user(username):
@@ -604,4 +604,63 @@ class ProfileAvatarTest(TestCase):
         self.profile.refresh_from_db()
         if self.profile.avatar:
             self.profile.avatar.delete(save=False)
+
+
+class ProjectCoverTest(TestCase):
+    """项目封面图：上传、展示、没传时不渲染 <img>。"""
+
+    def setUp(self):
+        self.user = make_user('projecter')
+        self.project = Project.objects.create(
+            name='测试项目',
+            summary='简介',
+            tech_stack='Django',
+        )
+
+    def _png(self, name='cover.png', size=(800, 450)):
+        """造一张 16:9 的合法 PNG。"""
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new('RGB', size, (60, 90, 140)).save(buf, format='PNG')
+        buf.seek(0)
+        return SimpleUploadedFile(name, buf.read(), content_type='image/png')
+
+    def test_cover_src_empty_when_not_uploaded(self):
+        """没传封面时 cover_src 返回空串，模板据此不渲染 img"""
+        self.assertEqual(self.project.cover_src, '')
+
+    def test_no_img_tag_without_cover(self):
+        """没传封面时列表页不出破图：不应有指向 media 的 img"""
+        response = self.client.get('/projects/')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, '/media/projects/covers/')
+
+    def test_uploaded_cover_renders_on_list_and_detail(self):
+        """上传后列表页与详情页都显示封面"""
+        self.project.cover = self._png()
+        self.project.save()
+        self.project.refresh_from_db()
+
+        self.assertTrue(self.project.cover_src.startswith('/media/projects/covers/'))
+
+        for path in ['/projects/', f'/projects/{self.project.slug}/']:
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 200, path)
+            self.assertContains(response, self.project.cover_src, msg_prefix=path)
+            # 16:9 裁切靠这个类，漏了会让不同尺寸的图把卡片撑变形
+            self.assertContains(response, 'aspect-video', msg_prefix=path)
+
+    def test_cover_is_optional(self):
+        """封面是可选字段，不填也能正常保存与展示"""
+        self.project.cover = ''
+        self.project.save()
+        response = self.client.get(f'/projects/{self.project.slug}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '测试项目')
+
+    def tearDown(self):
+        self.project.refresh_from_db()
+        if self.project.cover:
+            self.project.cover.delete(save=False)
+
 

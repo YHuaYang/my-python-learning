@@ -91,13 +91,20 @@ class WeeklyProgressAdmin(admin.ModelAdmin):
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ('name', 'slug', 'summary_preview', 'sort_order', 'created_date')
+    list_display = ('name', 'cover_preview', 'slug', 'summary_preview', 'sort_order', 'created_date')
     search_fields = ('name', 'summary', 'description')
     prepopulated_fields = {'slug': ('name',)}
     ordering = ('sort_order', '-created_date')
+    # 预览图不能在保存后手动改，否则会误导
+    readonly_fields = ('cover_preview_large',)
     fieldsets = (
         ('基本信息', {
             'fields': ('name', 'slug', 'summary', 'tech_stack', 'sort_order'),
+        }),
+        ('封面图', {
+            'fields': ('cover', 'cover_preview_large'),
+            'description': '建议 16:9 横向图，宽度 800px 以上。'
+                           '留空时前台只显示文字，不会出破图。',
         }),
         ('详细内容', {
             'fields': ('description',),
@@ -106,6 +113,30 @@ class ProjectAdmin(admin.ModelAdmin):
             'fields': ('github_url', 'demo_url'),
         }),
     )
+
+    @admin.display(description='封面')
+    def cover_preview(self, obj):
+        """列表页的小缩略图，一眼看出哪些项目还没传封面。"""
+        src = obj.cover_src if obj else ''
+        if not src:
+            return '（未上传）'
+        return format_html(
+            '<img src="{}" style="height:40px;width:71px;'
+            'object-fit:cover;border-radius:4px;">',
+            src,
+        )
+
+    @admin.display(description='当前封面')
+    def cover_preview_large(self, obj):
+        """编辑页的大预览，上传后保存就能确认结果。"""
+        src = obj.cover_src if obj else ''
+        if not src:
+            return '（还没上传封面）'
+        return format_html(
+            '<img src="{}" style="max-width:320px;'
+            'border-radius:6px;border:1px solid #ddd;">',
+            src,
+        )
 
     @admin.display(description='简介')
     def summary_preview(self, obj):

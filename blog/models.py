@@ -186,6 +186,19 @@ class Project(models.Model):
     # 技术栈用逗号分隔的纯文本，不单独建表：
     # 它只用于展示，没有筛选/统计需求，JSON 字段或关系表都属过度设计
     tech_stack = models.CharField(max_length=200, blank=True, default='')
+
+    # 项目封面图。可选：没传时前台用技术栈文字占位，不阻断展示。
+    # 用 ImageField 而非 FileField，让 Pillow 真的验证是图片。
+    # blank=True 与 default='' 配对：没传时存空串而不是 NULL，
+    # 模板里 {% if project.cover %} 能直接判断
+    cover = models.ImageField(
+        upload_to='projects/covers/',
+        blank=True,
+        default='',
+        verbose_name='封面图',
+        help_text='建议 16:9 横向图，宽度 800px 以上',
+    )
+
     github_url = models.URLField(blank=True, default='')
     demo_url = models.URLField(blank=True, default='')
     # 手控排序：数字小的在前面。没有这个字段就只好按创建时间排，不受控
@@ -197,6 +210,20 @@ class Project(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def cover_src(self):
+        """模板里统一用这个取封面地址。
+
+        没传图时返回空串，模板靠 {% if project.cover_src %} 判断
+        是否渲染 <img>，否则会显示一个破图框。
+
+        用属性而不是模板里直接写 {{ project.cover.url }}：
+        空文件访问 .url 会抛 ValueError，导致页面 500。
+        """
+        if self.cover:
+            return self.cover.url
+        return ''
 
     def save(self, *args, **kwargs):
         # 与 Post 相同的重名处理，但这里 name 已 unique，
