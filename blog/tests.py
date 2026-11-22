@@ -8,16 +8,17 @@
 
 测试会创建独立的 test_db.sqlite3，结束后销毁，不碰真实数据库。
 """
+import io
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 
-from .models import Category, Post, Tag, GuestbookMessage
 from .forms import GuestbookForm
-from .ranking import hot_score, sort_by_hot
+from .models import Category, GuestbookMessage, Post, Profile, Tag
 
 
 def make_user(username):
@@ -121,10 +122,15 @@ class DraftIsolationTest(TestCase):
 
 
 class PaginationTest(TestCase):
-    """分页行为，重点是非法页码不能导致 500。"""
+    """分页行为，重点是非法页码不能导致 500。
+
+    首页已改为固定 6 篇、不分页，所以用例改用分类页：
+    _paginate() 仍被分类/标签/搜索/进度页使用，分页逻辑照旧需要保护。
+    """
 
     def setUp(self):
         self.user = make_user('pager')
+        self.category = Category.objects.create(name='分页测试', type='教程')
         # 造 7 篇已发布文章，每页 5 条 → 2 页
         for i in range(7):
             Post.objects.create(
@@ -132,16 +138,18 @@ class PaginationTest(TestCase):
                 title=f'文章{i}',
                 text='x',
                 status='published',
+                category=self.category,
             )
+        self.url = f'/category/{self.category.slug}/'
 
     def test_first_page_has_five(self):
-        response = self.client.get('/')
+        response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context['posts']), 5)
         self.assertTrue(response.context['page_obj'].has_next())
 
     def test_second_page_has_two(self):
-        response = self.client.get('/', {'page': 2})
+        response = self.client.get(self.url, {'page': 2})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context['posts']), 2)
         self.assertFalse(response.context['page_obj'].has_next())
@@ -152,13 +160,13 @@ class PaginationTest(TestCase):
         如果视图用 paginator.page() 而非 get_page()，这里会抛
         EmptyPage 变成 500。
         """
-        response = self.client.get('/', {'page': 999})
+        response = self.client.get(self.url, {'page': 999})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['page_obj'].number, 2)
 
     def test_non_numeric_page_falls_back_to_first(self):
         """?page=abc 应回退到第 1 页"""
-        response = self.client.get('/', {'page': 'abc'})
+        response = self.client.get(self.url, {'page': 'abc'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['page_obj'].number, 1)
 
@@ -249,126 +257,146 @@ class FeedAndSitemapTest(TestCase):
         self.assertIn('/about/', content)
 
 
-class HotRankingTest(TestCase):
-    """热度排序算法（Hacker News 公式）。
-
-    公式：score = views / (age_hours + 2) ** 1.5
-    这些测试固定住了参数与边界行为，改动公式时会立刻暴露。
-    """
+class HomePostLimitTest(TestCase):
+    """首页只展示最新 6 篇，其余进归档。"""
 
     def setUp(self):
-        self.user = make_user('hotuser')
-        self.now = timezone.now()
+        self.user = make_user('lister')
+        now = timezone.now()
+        # 造 9 篇已发布文章。注意时间方向：
+        # published_date = now - i 小时，所以 i 越小越新，
+        # 文章0 最新、文章8 最旧。
+        for i in range(9):
+            post = Post.objects.create(
+                author=self.user,
+                title=f'文章{i}',
+                text='x',
+                status='published',
+            )
+            # 绕过 save() 精确控制发布时间（save() 会自动写成当前时间）
+            Post.objects.filter(pk=post.pk).update(
+                published_date=now - timedelta(hours=i)
+            )
 
-    def _make(self, title, views, hours_ago):
+    def test_home_shows_at_most_six(self):
+        """首页最多 6 篇，即使有 9 篇已发布"""
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['posts']), 6)
+
+    def test_home_shows_newest_first(self):
+        """首页取最新的 6 篇（文章0-5），从新到旧"""
+        response = self.client.get('/')
+        titles = [p.title for p in response.context['posts']]
+        self.assertEqual(titles, [f'文章{i}' for i in range(6)])
+
+    def test_home_excludes_older_than_limit(self):
+        """最旧的 3 篇（文章6-8）不出现在首页"""
+        response = self.client.get('/')
+        titles = [p.title for p in response.context['posts']]
+        for i in range(6, 9):
+            self.assertNotIn(f'文章{i}', titles)
+
+    def test_home_has_no_pagination(self):
+        """首页不再分页：带 page 参数也不报错，内容不变"""
+        response = self.client.get('/', {'page': 2})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['posts']), 6)
+
+    def test_home_with_fewer_than_limit(self):
+        """文章不足 6 篇时全部展示，不出错"""
+        Post.objects.all().delete()
+        for i in range(3):
+            Post.objects.create(
+                author=self.user, title=f'少量{i}', text='x', status='published'
+            )
+        response = self.client.get('/')
+        self.assertEqual(len(response.context['posts']), 3)
+
+
+class ArchiveTest(TestCase):
+    """归档页：首页之外的剩余文章，按月份分组。"""
+
+    def setUp(self):
+        self.user = make_user('archiver')
+
+    def _make(self, title, days_ago):
         post = Post.objects.create(
             author=self.user,
             title=title,
             text='x',
             status='published',
         )
-        # 直接写库绕过 save()，以便精确控制发布时间
         Post.objects.filter(pk=post.pk).update(
-            views=views,
-            published_date=self.now - timedelta(hours=hours_ago),
+            published_date=timezone.now() - timedelta(days=days_ago)
         )
-        post.refresh_from_db()
         return post
 
-    def test_formula_matches_manual_calculation(self):
-        """分数必须严格等于 views / (hours + 2) ** 1.5"""
-        post = self._make('公式验证', views=10, hours_ago=22)
-        expected = 10 / (22 + 2) ** 1.5
-        self.assertAlmostEqual(hot_score(post, now=self.now), expected, places=10)
-
-    def test_fresh_post_is_damped_by_offset(self):
-        """刚发布的文章分母是 2 而非 0，分数不会爆炸"""
-        post = self._make('刚发布', views=1, hours_ago=0)
-        # 1 / 2^1.5 而不是 1 / 0
-        self.assertAlmostEqual(hot_score(post, now=self.now), 1 / 2 ** 1.5, places=6)
-
-    def test_more_views_ranks_higher_at_same_age(self):
-        """同年龄时，阅读量高的排前面"""
-        low = self._make('低阅读', views=1, hours_ago=10)
-        high = self._make('高阅读', views=100, hours_ago=10)
-        self.assertGreater(hot_score(high, now=self.now), hot_score(low, now=self.now))
-
-    def test_newer_ranks_higher_at_same_views(self):
-        """同阅读量时，更新的排前面"""
-        old = self._make('旧文章', views=5, hours_ago=100)
-        new = self._make('新文章', views=5, hours_ago=1)
-        self.assertGreater(hot_score(new, now=self.now), hot_score(old, now=self.now))
-
-    def test_zero_views_scores_zero(self):
-        post = self._make('零阅读', views=0, hours_ago=1)
-        self.assertEqual(hot_score(post, now=self.now), 0.0)
-
-    def test_future_date_does_not_produce_negative_age(self):
-        """时钟回拨导致未来时间时，年龄兜底为 0，不出现负数或无穷大"""
-        post = self._make('未来时间', views=5, hours_ago=-10)
-        self.assertAlmostEqual(hot_score(post, now=self.now), 5 / 2 ** 1.5, places=6)
-
-    def test_sort_by_hot_orders_descending(self):
-        self._make('A阅读少', views=1, hours_ago=10)
-        self._make('B阅读多', views=50, hours_ago=10)
-        self._make('C很旧', views=50, hours_ago=1000)
-
-        posts = list(Post.objects.filter(status='published'))
-        ordered = sort_by_hot(posts, now=self.now)
-        self.assertEqual(ordered[0].title, 'B阅读多')
-
-
-class HomeSortSwitchTest(TestCase):
-    """首页「最新 / 热门」切换。"""
-
-    def setUp(self):
-        self.user = make_user('sorter')
-        now = timezone.now()
-        # 稍旧但阅读量很高（10000/(50+2)^1.5 ≈ 26.6）
-        old_hot = Post.objects.create(
-            author=self.user, title='旧的爆款', text='x', status='published'
-        )
-        Post.objects.filter(pk=old_hot.pk).update(
-            views=10000, published_date=now - timedelta(hours=50)
-        )
-        # 最新但完全没人看（0 阅读，分数恒为 0）
-        new_cold = Post.objects.create(
-            author=self.user, title='新的冷门', text='x', status='published'
-        )
-        Post.objects.filter(pk=new_cold.pk).update(
-            views=0, published_date=now - timedelta(hours=0)
-        )
-
-    def test_default_is_latest(self):
-        """不带参数时按时间倒序，新的在前"""
-        response = self.client.get('/')
+    def test_archive_page_renders(self):
+        self._make('旧文', days_ago=10)
+        response = self.client.get('/archive/')
         self.assertEqual(response.status_code, 200)
-        titles = [p.title for p in response.context['posts']]
-        self.assertEqual(titles[0], '新的冷门')
 
-    def test_sort_hot_puts_high_views_first(self):
-        """sort=hot 时阅读量高的在前
+    def test_archive_excludes_home_posts(self):
+        """首页那 6 篇不出现在归档页"""
+        for i in range(9):
+            self._make(f'文章{i}', days_ago=i)
+        response = self.client.get('/archive/')
+        archived = []
+        for _key, posts in response.context['groups']:
+            archived.extend(p.title for p in posts)
+        # days_ago = i 所以文章0 最新。首页占 0-5，归档剩 6-8
+        self.assertEqual(sorted(archived), ['文章6', '文章7', '文章8'])
 
-        选题参数在说明一点：公式并非「阅读量高就一定第一」。
-        views=100 / 500 小时 算出来是 0.0089，反而输给
-        views=1 / 1 小时的 0.1925（新文章权重优势）。
-        所以这里用 10000 阅读对 50 小时，差距足够大才能压过时间因素。
-        """
-        response = self.client.get('/', {'sort': 'hot'})
-        self.assertEqual(response.status_code, 200)
-        titles = [p.title for p in response.context['posts']]
-        self.assertEqual(titles[0], '旧的爆款')
+    def test_archive_is_complement_of_home(self):
+        """首页 + 归档 = 全部已发布文章，不重不漏"""
+        for i in range(9):
+            self._make(f'文章{i}', days_ago=i)
 
-    def test_invalid_sort_falls_back_to_latest(self):
-        """非法排序值回退到最新，不报错"""
-        response = self.client.get('/', {'sort': 'hacker'})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context['sort'], 'latest')
+        home = {p.pk for p in self.client.get('/').context['posts']}
+        archived = set()
+        for _key, posts in self.client.get('/archive/').context['groups']:
+            archived.update(p.pk for p in posts)
 
-    def test_hot_mode_ignores_page_param(self):
-        """热门模式不分页，传 page 也不应报错"""
-        response = self.client.get('/', {'sort': 'hot', 'page': 999})
-        self.assertEqual(response.status_code, 200)
+        all_ids = set(Post.objects.filter(status='published').values_list('pk', flat=True))
+        self.assertEqual(home & archived, set())        # 不重
+        self.assertEqual(home | archived, all_ids)      # 不漏
+
+    def test_archive_empty_when_few_posts(self):
+        """不足 6 篇时归档页为空，且给出提示"""
+        for i in range(3):
+            self._make(f'少量{i}', days_ago=i)
+        response = self.client.get('/archive/')
+        self.assertEqual(response.context['groups'], [])
+        self.assertContains(response, '没有更早的文章')
+
+    def test_archive_excludes_draft(self):
+        """草稿不进归档"""
+        for i in range(7):
+            self._make(f'已发布{i}', days_ago=i)
+        Post.objects.create(
+            author=self.user, title='这是草稿', text='x', status='draft'
+        )
+        response = self.client.get('/archive/')
+        archived = []
+        for _key, posts in response.context['groups']:
+            archived.extend(p.title for p in posts)
+        self.assertNotIn('这是草稿', archived)
+
+    def test_archive_groups_by_month(self):
+        """按月份分组，同月归在一起"""
+        # 先占满首页 6 个位置
+        for i in range(6):
+            self._make(f'首页{i}', days_ago=i)
+        # 再放两篇同日期的旧文，应归到同一组
+        self._make('旧文A', days_ago=100)
+        self._make('旧文B', days_ago=100)
+
+        response = self.client.get('/archive/')
+        groups = response.context['groups']
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(len(groups[0][1]), 2)
+
 
 
 class GuestbookTest(TestCase):
@@ -515,3 +543,65 @@ class GuestbookTest(TestCase):
         """表单必须带 CSRF token，否则提交会被 403"""
         response = self.client.get(self.url)
         self.assertContains(response, 'csrfmiddlewaretoken')
+
+
+class ProfileAvatarTest(TestCase):
+    """头像：上传优先于外链，都没设时不出破图。"""
+
+    def setUp(self):
+        self.profile, _ = Profile.objects.get_or_create(pk=1)
+        self.profile.nickname = '测试用户'
+        self.profile.avatar = ''
+        self.profile.avatar_url = ''
+        self.profile.save()
+
+    def _png(self, name='avatar.png', color=(194, 81, 0)):
+        """造一张最小合法 PNG。不能手写字节，
+        因为 ImageField 会真的解码校验，伪造的字节会验证失败。"""
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new('RGB', (32, 32), color).save(buf, format='PNG')
+        buf.seek(0)
+        return SimpleUploadedFile(name, buf.read(), content_type='image/png')
+
+    def test_avatar_src_empty_when_nothing_set(self):
+        """两个都空时 avatar_src 返回空字符串，模板据此不渲染 img"""
+        self.assertEqual(self.profile.avatar_src, '')
+
+    def test_avatar_src_falls_back_to_url(self):
+        """没上传时用外链"""
+        self.profile.avatar_url = 'https://example.com/a.png'
+        self.profile.save()
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.avatar_src, 'https://example.com/a.png')
+
+    def test_uploaded_avatar_takes_priority(self):
+        """两个都有时上传的图优先
+
+        这是最容易写错的地方：如果用 `if avatar else avatar_url` 的反向逻辑，
+        外链会盖住刚上传的图，用户会以为上传没生效。
+        """
+        self.profile.avatar_url = 'https://example.com/old.png'
+        self.profile.avatar = self._png()
+        self.profile.save()
+        self.profile.refresh_from_db()
+
+        self.assertTrue(self.profile.avatar_src.startswith('/media/'))
+        self.assertNotIn('example.com', self.profile.avatar_src)
+
+    def test_uploaded_avatar_renders_on_frontend(self):
+        """上传后首页与关于页都显示这个头像"""
+        self.profile.avatar = self._png()
+        self.profile.save()
+        self.profile.refresh_from_db()
+
+        for path in ['/', '/about/']:
+            response = self.client.get(path)
+            self.assertContains(response, self.profile.avatar.url, msg_prefix=path)
+
+    def tearDown(self):
+        # 测试产生的上传文件不会随测试数据库回滚，要手动删
+        self.profile.refresh_from_db()
+        if self.profile.avatar:
+            self.profile.avatar.delete(save=False)
+

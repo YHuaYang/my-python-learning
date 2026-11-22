@@ -9,63 +9,40 @@ views.py 处理用户请求：查数据 → 选模板 → 返回 HTML。
 否则草稿（published_date 为 NULL）会被直接访问到。
 筛选条件「列表里过滤了、详情里忘了过滤」是内容站最常见的越权漏洞。
 """
-from datetime import date
-
-from django.shortcuts import render,get_object_or_404,redirect
-from .models import Post,Category,Tag,Project,WeeklyProgress,Profile,GuestbookMessage
-from .forms import SearchForm,GuestbookForm
-from .ranking import sort_by_hot
-from django.db.models import F,Q
-from django.core.paginator import Paginator
 from django.core.cache import cache
+from django.core.paginator import Paginator
+from django.db.models import F, Q
+from django.shortcuts import get_object_or_404, redirect, render
+
+from .forms import GuestbookForm, SearchForm
+from .models import (
+    Category,
+    GuestbookMessage,
+    Post,
+    Profile,
+    Project,
+    Tag,
+    WeeklyProgress,
+)
 
 
-
-# 首页支持的排序方式与显示名。白名单制：
-# 不直接把 request.GET 的值传给代码，避免 ?sort=任意值 导致意外行为
-SORT_OPTIONS = {
-    'latest': '最新',
-    'hot': '热门',
-}
-DEFAULT_SORT = 'latest'
+# 首页只展示最新 N 篇，超出部分进归档页。
+# 用篇数而不是天数：写作频率不稳时，天数窗口会让首页时而有内容、
+# 时而空白；篇数上限保证首页始终是一个固定的矩，
+# 且“第 N+1 篇出现时最早的一篇自动移出”是个可预期的行为。
+HOME_POST_LIMIT = 6
 
 
 def post_list(request):
-    """首页：文章列表 + 个人简介 / 本周进度 / 项目精选。
-
-    规划文档把首页定位为「聚合入口」而不是纯文章列表，
-    所以这里要一次查多个模型。每个区块都用 first() 或切片取少量数据，
-    不用全部取出来再截断。
-    """
+    """首页：最新文章 + 个人简介 / 本周进度 / 项目精选。"""
     posts = (
         Post.objects
         .filter(status='published')
         .select_related('category')
         .prefetch_related('tags')
-        .order_by('-published_date')
+        .order_by('-published_date')[:HOME_POST_LIMIT]
     )
     categories = Category.objects.all()
-
-    # 排序方式取自 URL 参数，非法值回退到默认值
-    sort = request.GET.get('sort', DEFAULT_SORT)
-    if sort not in SORT_OPTIONS:
-        sort = DEFAULT_SORT
-
-    # WIDGET_LIMIT：首页只展示少量内容，完整列表在各自的独立页面
-    widget_limit = 5
-
-    if sort == 'hot':
-        # 热门排序必须在 Python 层算，所以先把全部结果取出来。
-        # 这里有意不用 Paginator：热门排序需要先对整个集合排序才能
-        # 知道前一页是哪几篇，若先分页再排，每页内部有序但页间无序。
-        # 数据量上千后应改成 annotate + ExpressionWrapper 在数据库排序。
-        posts = sort_by_hot(list(posts))
-        page_obj = posts
-    else:
-        # 用 get_page 而不是 page：page() 在页码非法时抛异常导致 500，
-        # get_page() 会把非法页码自动修正为第 1 页或最后一页
-        paginator = Paginator(posts, widget_limit)
-        page_obj = paginator.get_page(request.GET.get('page'))
 
     # 本周进度：取最新一条（模型 Meta 已按 -year、-week 排序）
     latest_progress = WeeklyProgress.objects.first()
@@ -77,14 +54,48 @@ def post_list(request):
     profile, _ = Profile.objects.get_or_create(pk=1)
 
     return render(request, 'blog/post_list.html', {
-        'posts': page_obj,
-        'page_obj': page_obj,
+        'posts': posts,
         'categories': categories,
-        'sort': sort,
-        'sort_options': SORT_OPTIONS,
         'latest_progress': latest_progress,
         'featured_projects': featured_projects,
         'profile': profile,
+    })
+
+
+def archive(request):
+    """归档页：首页之外的其余已发布文章，按月份分组。
+
+    与首页是整体与补集的关系：首页取最新 N 篇，这里取剩下的。
+    用同一个 HOME_POST_LIMIT 切片口径，两页加起来恰好是全部，
+    不会重复也不会漏。
+    """
+    all_posts = (
+        Post.objects
+        .filter(status='published')
+        .select_related('category')
+        .order_by('-published_date')
+    )
+
+    # 切成首页之外的部分。先取 N 篇切片的长度而不是硬写 HOME_POST_LIMIT：
+    # 文章不足 N 篇时，首页已经全部展示，归档页应为空而不是负数切片。
+    home_ids = list(all_posts[:HOME_POST_LIMIT].values_list('pk', flat=True))
+    older_posts = all_posts.exclude(pk__in=home_ids)
+
+    # 按月份分组。在 Python 层分组而不是数据库 GROUP BY：
+    # 需要在模板里直接遍历嵌套结构，且还要分页，
+    # 数据库聚合之后还要二次查询取具体文章，反而更繁。
+    groups = []
+    for post in older_posts:
+        if post.published_date is None:
+            continue
+        key = (post.published_date.year, post.published_date.month)
+        if not groups or groups[-1][0] != key:
+            groups.append((key, []))
+        groups[-1][1].append(post)
+
+    return render(request, 'blog/archive.html', {
+        'groups': groups,
+        'total': older_posts.count(),
     })
 
 

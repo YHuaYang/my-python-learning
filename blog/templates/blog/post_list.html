@@ -2,22 +2,7 @@
 {% block content %}
     <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div class="min-w-0">
-            <div class="mb-6 flex items-center gap-2 text-sm">
-                {% for value, label in sort_options.items %}
-                    {% if value == sort %}
-                        <span class="rounded-full bg-brand px-3 py-1 text-white">{{ label }}</span>
-                    {% else %}
-                        <a href="?sort={{ value }}"
-                           class="rounded-full border border-neutral-300 px-3 py-1 text-neutral-600 transition-colors hover:border-brand hover:text-brand dark:border-neutral-600 dark:text-neutral-400">{{ label }}</a>
-                    {% endif %}
-                {% endfor %}
-            </div>
-
             {% include "blog/_posts.html" %}
-
-            {% if sort == 'latest' %}
-                {% include "blog/_pagination.html" %}
-            {% endif %}
 
             {% if categories %}
                 <nav class="mt-12 border-t border-neutral-200 pt-6 dark:border-neutral-700">

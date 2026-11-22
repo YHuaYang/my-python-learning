@@ -17,6 +17,8 @@ urlpatterns = [
     # <str:slug>可以转换中文，而 <slug:slug>会404
     # name 用来反向解析{% url 'post_list' %}，之后要改路径直接改模板就行
     path('', views.post_list, name='post_list'),
+    # 归档页：首页只展示最新 N 篇，其余全在这里
+    path('archive/', views.archive, name='archive'),
     path('about/', views.about, name='about'),
     path('posts/<str:slug>/', views.post_detail, name='post_detail'),
     path('tag/<str:slug>/', views.tag_posts, name='tag_posts'),

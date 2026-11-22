@@ -1,0 +1,44 @@
+{% extends "blog/base.html" %}
+{% block title %}归档 - 多于点线圈 blog{% endblock %}
+{% block content %}
+    <h1 class="text-2xl font-bold">归档</h1>
+    <p class="mt-2 text-sm text-neutral-600 dark:text-neutral-300">
+        首页展示最新 6 篇，这里按月份汇总其余全部文章（共 {{ total }} 篇）。
+    </p>
+
+    {% if groups %}
+        <div class="mt-8 space-y-6">
+            {% for month, posts in groups %}
+                <section class="glass-sm p-5">
+                    <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                        {{ month.0 }} 年 {{ month.1 }} 月
+                        <span class="ml-1 font-normal normal-case tracking-normal">（{{ posts|length }} 篇）</span>
+                    </h2>
+                    <ul class="mt-3 divide-y divide-neutral-300/50 dark:divide-neutral-600/50">
+                        {% for post in posts %}
+                            <li class="py-2.5 first:pt-0 last:pb-0">
+                                <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                                    <time class="shrink-0 text-xs text-neutral-400 dark:text-neutral-500">
+                                        {{ post.published_date|date:"m-d" }}
+                                    </time>
+                                    <a href="{% url 'post_detail' post.slug %}"
+                                       class="text-sm font-medium hover:text-brand">{{ post.title }}</a>
+                                    {% if post.category %}
+                                        <a href="{% url 'category_posts' post.category.slug %}"
+                                           class="rounded-full bg-brand/10 px-2 py-0.5 text-xs text-brand transition-colors hover:bg-brand hover:text-white dark:bg-brand/20">
+                                            {{ post.category.name }}
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </section>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="glass-sm mt-8 border-dashed p-8 text-center text-neutral-500 dark:text-neutral-400">
+            没有更早的文章了。首页那 6 篇就是全部。
+        </p>
+    {% endif %}
+{% endblock %}

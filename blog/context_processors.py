@@ -14,6 +14,8 @@ from django.urls import reverse
 # URL 配置那时早已加载完毕，直接 reverse 就行。
 NAV_ITEMS = [
     ('首页', 'post_list'),
+    # 归档紧跟在首页后面：它确实是“首页之外的文章”的入口
+    ('归档', 'archive'),
     ('项目', 'projects'),
     ('进度', 'progress_list'),
     ('搜索', 'search'),
