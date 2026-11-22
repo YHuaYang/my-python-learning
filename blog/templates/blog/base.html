@@ -41,10 +41,9 @@
 
         <footer class="glass !rounded-none border-x-0 border-b-0 py-6 text-center text-sm text-neutral-600 dark:text-neutral-300">
             <p>&copy; 2026 多于点线圈</p>
+            {# 只留 RSS：Sitemap 是给爬虫看的，已通过 /robots.txt 指向它 #}
             <p class="mt-2">
                 <a href="{% url 'rss' %}" class="hover:text-brand">RSS 订阅</a>
-                <span class="mx-2 text-neutral-400 dark:text-neutral-500">|</span>
-                <a href="{% url 'sitemap' %}" class="hover:text-brand">Sitemap</a>
             </p>
         </footer>
 

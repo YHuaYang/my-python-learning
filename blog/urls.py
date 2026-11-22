@@ -37,4 +37,8 @@ urlpatterns = [
 
     path('rss/',LatestPostsFeed(),name='rss'),
     path('sitemap.xml',sitemap,{'sitemaps':sitemaps},name='sitemap'),
+
+    # robots.txt 必须在根路径：爬虫只认域名下的 /robots.txt，
+    # 放到子目录（如 /static/robots.txt）不会被读取
+    path('robots.txt', views.robots_txt, name='robots_txt'),
 ]

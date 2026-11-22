@@ -258,6 +258,42 @@ class FeedAndSitemapTest(TestCase):
         # 用 Site 的 domain 拼出的绝对地址，末尾是站点根和关于页
         self.assertIn('/about/', content)
 
+    def test_robots_txt_is_plain_text(self):
+        """robots.txt 必须是 text/plain，否则严格的爬虫会解析失败"""
+        response = self.client.get('/robots.txt')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('text/plain', response['Content-Type'])
+
+    def test_robots_txt_disallows_private_paths(self):
+        """后台、搜索结果、RSS 不应被索引
+
+        三个路径各有原因：
+        /admin/ —— 登录页被收录既不必要也不安全
+        /search/ —— 同关键词可生成无数 URL，重复内容稀释权重
+        /rss/    —— 与文章页内容重复，不应两种形式都被索引
+        """
+        content = self.client.get('/robots.txt').content.decode()
+        for path in ('/admin/', '/search/', '/rss/'):
+            self.assertIn(f'Disallow: {path}', content, msg=path)
+
+    def test_robots_txt_points_to_sitemap(self):
+        """必须包含 Sitemap 行，爬虫靠它发现站点地图"""
+        content = self.client.get('/robots.txt').content.decode()
+        self.assertIn('Sitemap: http', content)
+        self.assertIn('/sitemap.xml', content)
+
+    def test_footer_has_no_sitemap_link(self):
+        """页脚不再链到 sitemap.xml：人点开是一屏 XML，没意义
+
+        它仍可通过 /robots.txt 被爬虫发现，这一点由上一个测试保证。
+        """
+        html = self.client.get('/').content.decode()
+        i, j = html.find('<footer'), html.find('</footer>')
+        footer = html[i:j]
+        self.assertNotIn('Sitemap', footer)
+        # RSS 要保留：技术读者会用它订阅
+        self.assertIn('RSS', footer)
+
 
 class HomePostLimitTest(TestCase):
     """首页只展示最新 6 篇，其余进归档。"""

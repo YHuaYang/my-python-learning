@@ -8,9 +8,11 @@ views.py 处理用户请求：查数据 → 选模板 → 返回 HTML。
 否则草稿会被直接访问到。
 筛选条件「列表里过滤了、详情里忘了过滤」是内容站最常见的越权漏洞。
 """
+from django.contrib.sites.models import Site
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import F, Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import GuestbookForm, SearchForm
@@ -259,3 +261,46 @@ def about(request):
     # 用 get_or_create 而不是直接取：还没在后台填资料时不能报 404
     profile, _ = Profile.objects.get_or_create(pk=1)
     return render(request, 'blog/about.html', {'profile': profile})
+
+
+def robots_txt(request):
+    """生成 /robots.txt。
+
+    robots.txt 是爬虫访问网站时**先读**的约定文件，放在根路径。
+
+    为什么用视图而不是静态文件：
+    Sitemap 那一行必须是完整绝对 URL，而域名在开发/生产不同。
+    写成静态文件就得在部署时手改，改忘了会指向旧域名。
+    这里从 Site 框架取域名，上线时只需在后台 Sites 里改一次。
+
+    为什么禁止 /search/：
+    搜索结果页内容重复（同一个关键词可生成无数 URL），
+    让爬虫抓会稀释页面权重，还会把爬虫引到无意义的路径里。
+
+    为什么禁止 /rss/：
+    RSS 是给订阅者用的聚合格式，不是给人看的页面；
+    抓它会让同一批内容以两种形式被索引。
+
+    为什么禁止 /admin/：
+    后台登录页被搜索引擎收录既不必要也不安全。
+    """
+    site = Site.objects.get_current()
+    scheme = 'https' if request.is_secure() else 'http'
+    sitemap_url = f'{scheme}://{site.domain}/sitemap.xml'
+
+    lines = [
+        'User-agent: *',
+        'Disallow: /admin/',
+        'Disallow: /search/',
+        'Disallow: /rss/',
+        '',
+        'Allow: /',
+        '',
+        '# 爬虫靠这一行发现 sitemap，不需要在页面上放链接',
+        f'Sitemap: {sitemap_url}',
+        '',
+    ]
+    # content_type 必须是 text/plain：
+    # 用默认的 text/html 也能被解析，但不符合规范，
+    # 部分严格的爬虫会按 HTML 处理导致解析失败
+    return HttpResponse('\n'.join(lines), content_type='text/plain; charset=utf-8')
