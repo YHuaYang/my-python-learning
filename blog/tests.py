@@ -755,7 +755,7 @@ class ProjectCoverTest(TestCase):
     """项目封面图：上传、展示、没传时不渲染 <img>。"""
 
     def setUp(self):
-        self.user = make_user('projecter')
+        self.user = make_user('projector')
         self.project = Project.objects.create(
             name='测试项目',
             summary='简介',
@@ -893,6 +893,75 @@ class VisitLoggingTest(TestCase):
             HTTP_REFERER='http://testserver/projects/',
         )
         self.assertEqual(VisitLog.objects.get().referer_host, '')
+
+
+class ProjectReorderTest(TestCase):
+    """Project 排序重排 action。
+
+    背景：sort_order 没有唯一约束，可以多个项目都是 1。
+    排序规则是 ['sort_order', '-created_date']，
+    所以重复时靠创建时间倒序兜底，顺序不受手动控制。
+    重排后每个项目拿到唯一编号，之后改数字就能精确定位。
+    """
+
+    def setUp(self):
+        self.user = make_user('sorter')
+        self.user.is_staff = True
+        self.user.is_superuser = True
+        self.user.save(update_fields=['is_staff', 'is_superuser'])
+        self.client.force_login(self.user)
+
+        # 三个项目：前两个 sort_order 都是 1（制造重复）
+        self.a = Project.objects.create(name='项目A', sort_order=1)
+        self.b = Project.objects.create(name='项目B', sort_order=1)
+        self.c = Project.objects.create(name='项目C', sort_order=5)
+
+    def _run_action(self):
+        """通过 Admin 的 changelist POST 触发 action。"""
+        return self.client.post(
+            '/admin/blog/project/',
+            {
+                'action': 'renumber_sort_order',
+                '_selected_action': [p.pk for p in Project.objects.all()],
+            },
+            follow=True,
+        )
+
+    def test_action_renumbers_to_consecutive(self):
+        """重排后 sort_order 变成 1,2,3 连续且唯一"""
+        self._run_action()
+        values = sorted(Project.objects.values_list('sort_order', flat=True))
+        self.assertEqual(values, [1, 2, 3])
+
+    def test_action_keeps_display_order(self):
+        """重排不改变当前显示顺序——这是这个 action 的核心承诺"""
+        before = [p.name for p in Project.objects.all()]
+        self._run_action()
+        after = [p.name for p in Project.objects.all()]
+        self.assertEqual(before, after)
+
+    def test_action_is_idempotent(self):
+        """再跑一次不再改动（已连续编号）"""
+        self._run_action()
+        snapshot = list(Project.objects.values_list('pk', 'sort_order'))
+        self._run_action()
+        self.assertEqual(list(Project.objects.values_list('pk', 'sort_order')), snapshot)
+
+    def test_action_only_touches_selected(self):
+        """只对勾选的项目编号；没勾选的保持原值"""
+        self.client.post(
+            '/admin/blog/project/',
+            {
+                'action': 'renumber_sort_order',
+                '_selected_action': [self.a.pk],
+            },
+            follow=True,
+        )
+        self.a.refresh_from_db()
+        self.b.refresh_from_db()
+        self.assertEqual(self.a.sort_order, 1)
+        # b 没被勾选，仍是 1
+        self.assertEqual(self.b.sort_order, 1)
 
 
 class DashboardTest(TestCase):

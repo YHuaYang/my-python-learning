@@ -189,6 +189,14 @@ msgstr "搜索应用与模型…"
 msgid "Select"
 msgstr "选择"
 
+# Django 的 ActionForm 给 action 下拉框的空选项标的 label
+msgid "Select action"
+msgstr "选择操作"
+
+# 同一下拉框在部分页面用的另一种措辞
+msgid "Select action to run"
+msgstr "选择要执行的操作"
+
 msgid "Show counts"
 msgstr "显示计数"
 

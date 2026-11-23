@@ -167,6 +167,53 @@ class ProjectAdmin(UnfoldModelAdmin):
     def summary_preview(self, obj):
         return obj.summary[:30] or '（无简介）'
 
+    actions = ('renumber_sort_order',)
+
+    @admin.action(description='按当前顺序重新编号（消除重复的排序值）')
+    def renumber_sort_order(self, request, queryset):
+        """把排序值重编号成 1, 2, 3…，**不改变当前显示顺序**。
+
+        为什么需要：sort_order 没有唯一约束，可以多个项目都是 1。
+        排序规则是 ['sort_order', '-created_date']，
+        所以重复时靠创建时间倒序兜底（新建的在前）。
+        结果是「填了数字但顺序不受控」，想精确调位置就无从入手。
+
+        重排后：顺序完全不变，但每个项目拿到唯一编号，
+        之后改任何一个数字就能确定地把它移到目标位置。
+
+        两个细节：
+        1. 用当前视图的排序结果作为编号依据，而不是按 pk。
+           这样「重排后顺序不变」才成立。
+        2. 用 bulk_update 一次写完，不逐条 save()：
+           N 个项目就是 N 次 UPDATE 对比 1 次，且不触发信号。
+        """
+        ordering = queryset.model._meta.ordering
+        # 必须对传入的 queryset 重新排序：
+        # 用户在列表页勾选的可能只是部分项，且 queryset 的
+        # 默认排序不一定是 Meta.ordering（比如刚搜索过）
+        items = list(queryset.order_by(*ordering))
+
+        if not items:
+            self.message_user(request, '没有选中任何项目', messages.WARNING)
+            return
+
+        changed = 0
+        for index, obj in enumerate(items, start=1):
+            if obj.sort_order != index:
+                obj.sort_order = index
+                changed += 1
+
+        if changed == 0:
+            self.message_user(request, '排序值已经是 1 开始的连续编号，无需调整')
+            return
+
+        queryset.model.objects.bulk_update(items, ['sort_order'])
+        self.message_user(
+            request,
+            f'已重编号 {len(items)} 个项目（其中 {changed} 个有变化），'
+            '显示顺序保持不变',
+        )
+
 
 @admin.register(Profile)
 class ProfileAdmin(UnfoldModelAdmin):
