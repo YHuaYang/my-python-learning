@@ -7,6 +7,7 @@ ModelAdmin 里的每一项都是「展示层」配置，不影响数据存储和
 import logging
 
 from django.contrib import admin, messages
+from django.templatetags.static import static
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin as UnfoldModelAdmin
 
@@ -36,8 +37,58 @@ logger = logging.getLogger(__name__)
 # 下面所有 Admin 类都必须继承 UnfoldModelAdmin 而不是 admin.ModelAdmin。
 
 
+class MarkdownEditorMixin(UnfoldModelAdmin):
+    """给指定字段挂上 Toast UI 的 Markdown 编辑器。
+
+    为什么要抽成 mixin：
+    文章正文、项目详情、周进度正文三处都要用，
+    复制三份 Media 与 get_form 很容易改漏一处。
+
+    子类只需声明 markdown_fields，其余自动完成。
+
+    为什么直接继承 UnfoldModelAdmin 而不是纯 object：
+    纯 mixin 的 super() 指向 object，没有 get_form，
+    静态检查会报「Cannot access attribute get_form」。
+    直接继承基类后 super() 有完整类型，子类只需再写
+    (MarkdownEditorMixin) 就行，不用多重继承。
+    """
+
+    # 子类覆盖：要加编辑器的字段名
+    markdown_fields: tuple[str, ...] = ()
+
+    class Media:
+        # admin-editor.js 539KB（gzip 167KB）。
+        # 通过 ModelAdmin.Media 注入，只有声明了这个 mixin 的
+        # 编辑页会加载，不是所有后台页面。
+        #
+        # Django 会自动去重：同一页多个 Admin 声明相同资源
+        # 也只输出一次。
+        css = {
+            'all': (static('js/asset-admin-editor.css'),),
+        }
+        js = (static('js/admin-editor.js'),)
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        for name in self.markdown_fields:
+            if name not in form.base_fields:
+                continue
+            widget = form.base_fields[name].widget
+            # 只打标记，不换 widget 类：
+            # 保留 Admin 默认的 AdminTextareaWidget，样式才一致。
+            # admin-editor.ts 只增强带这个属性的 textarea，
+            # 不会误伤搜索框与帮助文本。
+            widget.attrs['data-markdown-editor'] = ''
+            widget.attrs['rows'] = 10
+        return form
+
+
 @admin.register(Post)
-class PostAdmin(UnfoldModelAdmin):
+class PostAdmin(MarkdownEditorMixin):
+       # 只给正文加编辑器，不给摘要：
+       # 摘要是短文本（200 字左右），用 500px 高的编辑器反而碍事。
+       markdown_fields = ('text',)
+
        # 列表页显示的列。写字段名时 Django 会显示该值的 __str__，
        # 所以 'author' 显示的是用户名（User.__str__ 返回 username）
        list_display = ('title', 'slug', 'status', 'author', 'category', 'published_date', 'views')
@@ -88,7 +139,10 @@ class TagAdmin(UnfoldModelAdmin):
 
 
 @admin.register(WeeklyProgress)
-class WeeklyProgressAdmin(UnfoldModelAdmin):
+class WeeklyProgressAdmin(MarkdownEditorMixin):
+    # 周进度正文也用 Markdown（支持小标题、列表）
+    markdown_fields = ('content',)
+
     # __str__ 会渲染成「2026 年第 43 周」
     list_display = ('__str__', 'summary_preview', 'published_date')
     list_filter = ('year',)
@@ -116,7 +170,10 @@ class WeeklyProgressAdmin(UnfoldModelAdmin):
 
 
 @admin.register(Project)
-class ProjectAdmin(UnfoldModelAdmin):
+class ProjectAdmin(MarkdownEditorMixin):
+    # 项目详细说明用 Markdown（表格、代码块都支持）
+    markdown_fields = ('description',)
+
     list_display = ('name', 'cover_preview', 'slug', 'summary_preview', 'sort_order', 'created_date')
     search_fields = ('name', 'summary', 'description')
     prepopulated_fields = {'slug': ('name',)}

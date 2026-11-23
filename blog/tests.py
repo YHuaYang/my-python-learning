@@ -20,7 +20,16 @@ from django.utils import timezone
 
 from .dashboard import dashboard_context
 from .forms import GuestbookForm
-from .models import Category, GuestbookMessage, Post, Profile, Project, Tag, VisitLog
+from .models import (
+    Category,
+    GuestbookMessage,
+    Post,
+    Profile,
+    Project,
+    Tag,
+    VisitLog,
+    WeeklyProgress,
+)
 
 
 def make_user(username):
@@ -962,6 +971,100 @@ class ProjectReorderTest(TestCase):
         self.assertEqual(self.a.sort_order, 1)
         # b 没被勾选，仍是 1
         self.assertEqual(self.b.sort_order, 1)
+
+
+class MarkdownEditorAdminTest(TestCase):
+    """三个编辑页要挂上 Toast UI 编辑器，其余页不挂。
+
+    相关 bug 记录：
+    1. 最初只绑 submit 同步，实测提交时 textarea 仍是空值
+    2. 只绑 change 也不行：Toast UI 渲染残缺 Markdown 时
+       抛 RangeError，change 不触发
+    3. 最终方案是 change + submit(capture) + 500ms 轮询三层兜底
+    4. 残缺数据（未闭合的 ** ）会让编辑器整个崩掉，
+       现已加 try/catch，失败时回退成纯文本框而非白屏
+    """
+
+    def setUp(self):
+        self.user = make_user('markdownuser')
+        self.user.is_staff = True
+        self.user.is_superuser = True
+        self.user.save(update_fields=['is_staff', 'is_superuser'])
+        self.client.force_login(self.user)
+
+        self.post = Post.objects.create(
+            author=self.user, title='编辑器测试', text='# 正文', status='draft',
+        )
+        self.project = Project.objects.create(
+            name='编辑器测试项目', description='## 详情',
+        )
+        self.progress = WeeklyProgress.objects.create(
+            year=2026, week=48, content='## 周报',
+        )
+
+    def test_editor_assets_loaded_on_edit_pages(self):
+        """三个编辑页都要加载编辑器资源"""
+        for path in (
+            f'/admin/blog/post/{self.post.pk}/change/',
+            f'/admin/blog/project/{self.project.pk}/change/',
+            f'/admin/blog/weeklyprogress/{self.progress.pk}/change/',
+        ):
+            html = self.client.get(path).content.decode()
+            self.assertIn('admin-editor.js', html, msg=path)
+            self.assertIn('asset-admin-editor.css', html, msg=path)
+
+    def test_correct_fields_are_tagged(self):
+        """每个模型只标记该用编辑器的字段"""
+        cases = [
+            (f'/admin/blog/post/{self.post.pk}/change/', 'text', 'excerpt'),
+            (f'/admin/blog/project/{self.project.pk}/change/', 'description', 'summary'),
+            (f'/admin/blog/weeklyprogress/{self.progress.pk}/change/', 'content', 'summary'),
+        ]
+        for path, expected, not_expected in cases:
+            html = self.client.get(path).content.decode()
+            # 期望的字段带 data-markdown-editor
+            self.assertRegex(
+                html,
+                rf'<textarea[^>]*name="{expected}"[^>]*data-markdown-editor',
+                msg=f'{path} 的 {expected} 应有标记',
+            )
+            # 摘要类短字段不该有：500px 高的编辑器不适合短文本
+            self.assertNotRegex(
+                html,
+                rf'<textarea[^>]*name="{not_expected}"[^>]*data-markdown-editor',
+                msg=f'{path} 的 {not_expected} 不应有标记',
+            )
+
+    def test_no_editor_on_unrelated_pages(self):
+        """后台首页、用户管理页不该加载编辑器（539KB 没必要）"""
+        for path in ('/admin/', '/admin/auth/user/'):
+            html = self.client.get(path).content.decode()
+            self.assertNotIn('admin-editor.js', html, msg=path)
+            self.assertNotIn('data-markdown-editor', html, msg=path)
+
+    def test_mixin_applied_to_three_admins(self):
+        """三个 Admin 都继承了 MarkdownEditorMixin 且声明了字段"""
+        from django.contrib import admin
+
+        from .admin import MarkdownEditorMixin
+        from .models import Post as PostModel
+        from .models import Project as ProjectModel
+        from .models import WeeklyProgress as WPModel
+
+        expected = {
+            PostModel: ('text',),
+            ProjectModel: ('description',),
+            WPModel: ('content',),
+        }
+        for model, fields in expected.items():
+            obj = admin.site._registry[model]
+            # 静态类型上 obj 是 ModelAdmin，不知道 markdown_fields。
+            # 运行时它确实是 MarkdownEditorMixin 实例，isinstance 已经断言过，
+            # 所以这里用 getattr 取值，不做类型断言。
+            self.assertIsInstance(obj, MarkdownEditorMixin, model.__name__)
+            self.assertEqual(
+                getattr(obj, 'markdown_fields', None), fields, model.__name__,
+            )
 
 
 class DashboardTest(TestCase):

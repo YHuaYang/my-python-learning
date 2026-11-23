@@ -22,9 +22,22 @@ export default defineConfig({
     // 不用哈希文件名：Django 模板里要写固定路径。
     // 缓存靠 URL 查询参数或部署时统一失效，个人博客流量小，够用
     rollupOptions: {
-      input: fileURLToPath(new URL('./assets/js/main.tsx', import.meta.url)),
+      // 两个入口，分别输出两个文件：
+      //
+      // bundle.js        —— 前台 React 孤岛（主题切换、导航、留言板）
+      // admin-editor.js  —— 后台 Markdown 编辑器（Toast UI，约 940KB）
+      //
+      // 为什么不合成一个：Toast UI 体积接近 1MB，
+      // 而前台访客完全用不到。分开后只有后台文章编辑页会加载它。
+      input: {
+        bundle: fileURLToPath(new URL('./assets/js/main.tsx', import.meta.url)),
+        'admin-editor': fileURLToPath(
+          new URL('./assets/js/admin-editor.ts', import.meta.url),
+        ),
+      },
       output: {
-        entryFileNames: 'bundle.js',
+        // [name] 从 input 的键取值，得到 bundle.js 与 admin-editor.js
+        entryFileNames: '[name].js',
         chunkFileNames: 'chunk-[name].js',
         assetFileNames: 'asset-[name][extname]',
         // 打成单个文件：孤岛组件总量小，多文件请求反而更慢
