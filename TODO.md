@@ -2,32 +2,21 @@
 
 ## 待办
 
-- [ ] **修复编辑器右侧预览区的工具栏冲突**（用户 2026-11-23 反馈）
-      现象：在右边预览区选中文字后点工具栏（如加粗），
-      会在正文里插入多余的 `****` 之类标记。
-      预期：预览区应该只读，不应该能选中文字再应用格式，
-      或者工具栏操作应当只作用于源码区。
-      排查方向：Toast UI 的预览区是个普通 DOM，工具栏默认会
-      作用于当前焦点所在区域；需要看它是支持「预览区禁止选区」
-      还是需要监控 selection 并拦截。
+- [ ] **服务器到手后的实际部署**（配置已备好，等服务器）
+      服务器：腾讯云 4核4G / Ubuntu 24.04 LTS / 只上线一年
+      按 `deploy/README.md` 走，五个关键点：
+      1. 未备案时只能用 IP 访问（README 第十一节有临时配置）
+      2. 改三处 `example.com`：nginx.conf / deploy.sh / .env
+      3. DNS 解析成功后才能申请证书（`dig 域名 +short` 验证）
+      4. 拿到证书后 `.env` 设 `USE_HTTPS=True` 并重启
+      5. 后台改 `Site.domain` 为真实域名，否则 sitemap 指向 127.0.0.1
 
-- [ ] **工具栏提示文字中文化**（用户 2026-11-23 反馈）
-      现在鼠标悬停工具栏图标显示的是英文（Bold / Italic /
-      Heading 等）。Toast UI 的 i18n 覆盖了按钮标签，
-      但 tooltip 可能需要单独处理。
-
-- [ ] 图片上传接口（配合编辑器）
-      存 `media/uploads/`。安全要点：
-      - `@login_required` + `is_staff` 双重检查
-      - 用 Pillow 真解码验证是图片，不查扩展名
-      - 禁止 SVG（可内嵌脚本）
-      - 单文件 5MB + 尺寸上限
-      - 返回 JSON 给编辑器插入
-
-- [ ] 部署上线
-      阻塞项：`media/` 在生产环境没有托管方案
-      （现在靠 `DEBUG=True` 下的 `static()`，上线后所有上传图片会 404）。
-      其他：4 个 HTTPS 安全项、`Site.domain` 改真实域名、SQLite 换 PostgreSQL。
+- [ ] 到期前备份数据（服务器只用一年）
+      数据库与上传的图片只在服务器上，代码在 git 里不用管。
+      ```bash
+      sudo -u www-data sqlite3 /var/www/mysite/db.sqlite3 ".backup /root/mysite.sqlite3"
+      sudo tar -czf /root/media.tar.gz -C /var/www/mysite media/
+      ```
 
 - [ ] 手机端响应式（用户明确暂缓，动前先问）
 
@@ -36,6 +25,30 @@
 - [ ] React 新闻页 `/news/`（规划文档第 7-9 周）
 
 ## 已完成
+
+- [x] 生产部署配置（2026-11-24）
+      gunicorn.conf.py / mysite.service / nginx.conf（含 /media/ 托管）
+      deploy.sh / update.sh / README.md
+      修复 collectstatic 死锁：Media 类的 static() 改用 lazy()
+      check --deploy 从 4 个警告变为 0
+
+- [x] 编辑器图片上传接口（2026-11-24）
+      七层防护，12 个测试覆盖：权限、方法、大小、真解码、
+      尺寸、禁 SVG、uuid 重命名
+
+- [x] 修复编辑器工具栏污染正文（2026-11-24）
+      根因是无有效选区时 Toast UI 会插入孤立 **，
+      而孤立的 ** 会让下次渲染抛 RangeError 把编辑器搞崩
+      修法：拦截无选区/选区在编辑器外的行内格式按钮
+
+- [x] 工具栏提示中文化（2026-11-24）
+      根因：只写 language: 'zh-CN' 不够，必须导入语言包文件
+      `import '@toast-ui/editor/dist/i18n/zh-cn'`
+
+- [x] 清理开发期测试内容（2026-11-24）
+      清空 Post/Project/WeeklyProgress/GuestbookMessage/VisitLog/Profile
+      保留 Category（3）与 Tag（2）作为结构数据
+      保留 media/ 下用户上传的图片
 
 - [x] 项目排序重编号按钮（2026-11-23）
 - [x] Toast UI Markdown 编辑器（2026-11-23）
