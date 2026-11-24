@@ -53,3 +53,8 @@ declare module '@toast-ui/editor' {
 
 declare module '@toast-ui/editor/dist/toastui-editor.css'
 declare module '@toast-ui/editor/dist/theme/toastui-editor-dark.css'
+// 语言包是副作用导入：导入即执行 Editor.setLanguage('zh-CN', {...})，
+// 不导出任何值，所以只需声明模块存在。
+// 不导入它时，构造参数里的 language: 'zh-CN' 找不到字典，
+// 界面会全部回退到英文。
+declare module '@toast-ui/editor/dist/i18n/zh-cn'

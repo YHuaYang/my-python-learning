@@ -17,6 +17,14 @@ import '@toast-ui/editor/dist/toastui-editor.css'
 // 这里只导入了默认（浅色）CSS，暗色通过下面的 CSS 覆盖处理。
 import '@toast-ui/editor/dist/theme/toastui-editor-dark.css'
 
+// 中文语言包。
+//
+// 关键：只写 `language: 'zh-CN'` 不够，必须把这个文件导入。
+// 它的作用是执行 Editor.setLanguage('zh-CN', {...})，
+// 没导入时构造参数里的 'zh-CN' 找不到对应字典，
+// 全部回退到英文（按钮 aria-label 与悬停提示都是 Bold/Italic/Headings）。
+import '@toast-ui/editor/dist/i18n/zh-cn'
+
 /** Django Admin 的 textarea 通常有这些 id 模式，先按 id 找 */
 const TARGET_SELECTOR = 'textarea'
 
@@ -132,6 +140,125 @@ function enhance(textarea: HTMLTextAreaElement): void {
     const timer = window.setInterval(sync, 500)
     window.addEventListener('pagehide', () => window.clearInterval(timer), {
         once: true,
+    })
+
+    // 禁止在预览区选中文字。
+    //
+    // 实测问题：预览区（右侧）虽然不可编辑，但文字能被选中。
+    // 在那里选中文字再点工具栏，会在源码开头产生孤立的 ****。
+    // 预览区本来就只是看的，禁掉选区最直接。
+    disablePreviewSelection(wrapper)
+
+    // 拦截「无有效选区」时的行内格式按钮。
+    //
+    // 真正的原因（比预览区的问题更根本）：
+    // Toast UI 的加粗/斜体/删除线/行内代码是「切换」语义。
+    // 光标在开头没有选区时点加粗，它会插一对 ** 并等你
+    // 在中间打字；但如果你接着保存/切模式，就留下孤立的 ****。
+    // 而孤立的 ** 会让下次渲染抛 RangeError，把编辑器搞崩。
+    //
+    // 所以：源码区没有选区时，直接拦掉这几个按钮，
+    // 避免产生会撑死编辑器的脏数据。
+    guardInlineFormatting(wrapper)
+}
+
+/**
+ * 无选区时屏蔽行内格式按钮。
+ *
+ * 这几个按钮的语义是「把选中的文字包起来」，
+ * 没有选区时它们是唯一会留下孤立标记的操作：
+ *   bold → **、italic → *、strike → ~~、code → `
+ *
+ * 标题/列表/表格不需要选区，不屏蔽。
+ *
+ * 注意：只在 Markdown 模式生效。WYSIWYG 模式下
+ * 按钮直接改 DOM，不会产生文本标记。
+ */
+function guardInlineFormatting(root: HTMLElement): void {
+    // 需要选区的按钮的 aria-label（用中文语言包里的文字）
+    const needsSelection = new Set([
+        '加粗', '斜体字', '删除线', '内嵌代码',
+    ])
+
+    const toolbar = root.querySelector<HTMLElement>('.toastui-editor-toolbar')
+    if (!toolbar) return
+
+    toolbar.addEventListener(
+        'click',
+        (event) => {
+            const target = (event.target as HTMLElement).closest('button')
+            if (!target) return
+
+            const label = target.getAttribute('aria-label') || ''
+            if (!needsSelection.has(label)) return
+
+            // WYSIWYG 模式下不拦：那里选中与否都不会产生文本标记
+            if (root.classList.contains('toastui-editor-wysiwyg')) return
+
+            // 两个条件都要满足才放行：
+            //   1. 有选区（非空）
+            //   2. 选区必须在编辑器内部
+            //
+            // 只查第 1 条不够：实测用 Ctrl+A 或鼠标拖选
+            // 把侧边栏、面包屑也选进来时，选区非空但不在编辑器里，
+            // Toast UI 同样找不到插入点，照样产生孤立的 ****。
+            const sel = window.getSelection()
+            const selected = sel?.toString().trim() ?? ''
+            // 用 includes 而不是双重否定：
+            // `!!(a && b && c)` 读起来要逆着推两遍，
+            // 改成布尔表达式直接写可读得多
+            const anchorInEditor = sel?.anchorNode != null && root.contains(sel.anchorNode)
+            const focusInEditor = sel?.focusNode != null && root.contains(sel.focusNode)
+
+            const valid = selected.length > 0 && anchorInEditor && focusInEditor
+
+            if (!valid) {
+                // 阻止按钮自己的 click 处理
+                event.preventDefault()
+                event.stopPropagation()
+                console.error(
+                    `[admin-editor] 「${label}」需要先在编辑器内选中文字，`
+                    + '否则会在正文里留下孤立标记',
+                )
+            }
+        },
+        // capture 阶段：必须比 Toast UI 自己的监听器先执行
+        { capture: true },
+    )
+}
+
+/**
+ * 让预览区不可选中。
+ *
+ * 为什么不在 CSS 里写：
+ * 样式表已经很大了，且这个行为只在编辑器初始化后
+ * 才能确定目标元素存在，写在 TS 里更直接。
+ *
+ * user-select 要同时写给标准属性与 -webkit- 前缀：
+ * Safari 仍需要前缀才生效。
+ */
+function disablePreviewSelection(root: HTMLElement): void {
+    const preview = root.querySelector<HTMLElement>('.toastui-editor-md-preview')
+    if (!preview) return
+
+    preview.style.userSelect = 'none'
+    preview.style.setProperty('-webkit-user-select', 'none')
+
+    // 切到 WYSIWYG 模式时，预览区变成编辑区，必须能选中（那是正文）。
+    // 所以监听模式切换，按当前模式开关。
+    const modeSwitch = root.querySelector<HTMLElement>('.toastui-editor-mode-switch')
+    if (!modeSwitch) return
+
+    modeSwitch.addEventListener('click', () => {
+        // 点击后等一个事件循环，让 Toast UI 先切完模式
+        window.setTimeout(() => {
+            const isWysiwyg = root.classList.contains('toastui-editor-wysiwyg')
+            const mdPreview = root.querySelector<HTMLElement>('.toastui-editor-md-preview')
+            if (!mdPreview) return
+            const value = isWysiwyg ? 'auto' : 'none'
+            mdPreview.style.userSelect = value
+            mdPreview.style.setProperty('-webkit-user-select', value)
+        }, 0)
     })
 }
 

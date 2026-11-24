@@ -197,6 +197,10 @@ msgstr "选择操作"
 msgid "Select action to run"
 msgstr "选择要执行的操作"
 
+# unfold 登录页的副标题：subtitle=_('Welcome back to')
+msgid "Welcome back to"
+msgstr "欢迎回来，"
+
 msgid "Show counts"
 msgstr "显示计数"
 
