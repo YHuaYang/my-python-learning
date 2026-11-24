@@ -46,6 +46,20 @@ declare module '@toast-ui/editor' {
         /** 取消监听，与 on 成对使用 */
         off(eventName: 'change' | 'focus' | 'blur', handler?: () => void): void
 
+        /**
+         * 接管图片插入。
+         *
+         * Toast UI 默认把图片转成 base64 内联进 Markdown，
+         * 一张图就让正文膨胀几百 KB。注册这个钩子后，
+         * 粘贴/选择图片时先调我们的上传逻辑，
+         * 拿到 URL 后再调 callback 插入 ![](url)。
+         *
+         * callback 第二个参数是 alt 文本。
+         */
+        addImageBlobHook(
+            hook: (blob: Blob, callback: (url: string, altText: string) => void) => void,
+        ): void
+
         /** 销毁实例，解绑事件 */
         destroy(): void
     }

@@ -1067,6 +1067,153 @@ class MarkdownEditorAdminTest(TestCase):
             )
 
 
+class EditorImageUploadTest(TestCase):
+    """编辑器图片上传接口的每一层安全防护。
+
+    这个接口是公开的 POST 端点，漏一层就是个实际漏洞，
+    所以每一层都单独测。
+    """
+
+    URL = '/admin-upload-image/'
+
+    def setUp(self):
+        self.user = make_user('uploader')
+        self.user.is_staff = True
+        self.user.is_superuser = True
+        self.user.save(update_fields=['is_staff', 'is_superuser'])
+
+    # --- 构造测试图片 ---
+    @staticmethod
+    def _png(size=(100, 100)) -> bytes:
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new('RGB', size, (200, 50, 50)).save(buf, format='PNG')
+        return buf.getvalue()
+
+    @staticmethod
+    def _iframe() -> tuple[bytes, bytes]:
+        """返回 (jpeg, svg含script) 两份数据"""
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new('RGB', (50, 50), (50, 200, 50)).save(buf, format='JPEG')
+        svg = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+        return buf.getvalue(), svg
+
+    def _post(self, name: str, content: bytes, ctype: str = 'image/png'):
+        return self.client.post(
+            self.URL, {'image': SimpleUploadedFile(name, content, ctype)},
+        )
+
+    # --- 权限---
+    def test_anonymous_redirected_to_login(self):
+        """未登录：重定向到登录页，不能上传"""
+        r = self._post('a.png', self._png())
+        self.assertEqual(r.status_code, 302)
+
+    def test_non_staff_forbidden(self):
+        """登录但不是 staff：403。单靠 login_required 不够"""
+        normal = make_user('plainuser')
+        self.client.force_login(normal)
+        r = self._post('a.png', self._png())
+        self.assertEqual(r.status_code, 403)
+
+    def test_get_method_rejected(self):
+        """GET 不能写数据"""
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(self.URL).status_code, 405)
+
+    # --- 正常路径 ---
+    def test_valid_png_returns_url(self):
+        self.client.force_login(self.user)
+        r = self._post('ok.png', self._png())
+        self.assertEqual(r.status_code, 200)
+        url = r.json()['data']['url']
+        self.assertTrue(url.startswith('/media/uploads/'))
+        self.assertTrue(url.endswith('.png'))
+
+    def test_valid_jpeg_gets_jpg_extension(self):
+        """JPEG 存成 .jpg 而不是 .jpeg"""
+        self.client.force_login(self.user)
+        jpeg, _ = self._iframe()
+        r = self._post('ok.jpg', jpeg, 'image/jpeg')
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()['data']['url'].endswith('.jpg'))
+
+    def test_filename_is_randomized(self):
+        """文件名用 uuid 重生成，不含用户提供的名字"""
+        self.client.force_login(self.user)
+        r = self._post('my-secret-name.png', self._png())
+        url = r.json()['data']['url']
+        self.assertNotIn('my-secret-name', url)
+        # uuid4 的 hex 是 32 位
+        self.assertRegex(url, r'/media/uploads/[0-9a-f]{32}\.png$')
+
+    def test_path_traversal_filename_is_neutralized(self):
+        """恶意文件名不会写到 MEDIA_ROOT 之外"""
+        self.client.force_login(self.user)
+        r = self._post('../../etc/passwd.png', self._png())
+        self.assertEqual(r.status_code, 200)
+        url = r.json()['data']['url']
+        self.assertNotIn('passwd', url)
+        self.assertNotIn('..', url)
+
+    # --- 内容校验 ---
+    def test_fake_png_rejected(self):
+        """扩展名对、内容不是图片 → 拒绝。必须真解码而不看扩展名"""
+        self.client.force_login(self.user)
+        r = self._post('fake.png', b'GIF89a' + b'not an image' * 20)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('不是有效的图片', r.json()['error']['message'])
+
+    def test_svg_rejected(self):
+        """SVG 必须拒绝：它是文本，可内嵌 <script> 被浏览器执行"""
+        self.client.force_login(self.user)
+        _, svg = self._iframe()
+        r = self._post('evil.svg', svg, 'image/svg+xml')
+        self.assertEqual(r.status_code, 400)
+
+    def test_oversized_dimensions_rejected(self):
+        """尺寸超限（防解压炸弹）"""
+        self.client.force_login(self.user)
+        r = self._post('big.png', self._png(size=(9000, 100)))
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('尺寸过大', r.json()['error']['message'])
+
+    def test_oversized_file_rejected(self):
+        """超过 5MB 拒绝"""
+        self.client.force_login(self.user)
+        big = self._png() + b'\x00' * (6 * 1024 * 1024)
+        r = self._post('huge.png', big)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('不能超过', r.json()['error']['message'])
+
+    def test_missing_file_rejected(self):
+        self.client.force_login(self.user)
+        r = self.client.post(self.URL, {})
+        self.assertEqual(r.status_code, 400)
+
+    def tearDown(self):
+        """清理测试上传的文件（不随数据库回滚）。
+
+        上传文件写在 MEDIA_ROOT，不进数据库，所以不会随测试事务回滚，
+        不删就会在仓库里留下垃圾。
+
+        用 contextlib.suppress 而不是 ignore_errors：
+        两者行为一样，但 suppress 让阅读者与静态检查都明确看到
+        「这里预期会失败且无害」——Windows 上文件句柄未及时释放
+        时 rmtree 会报 PermissionError，不该让 teardown 失败。
+        """
+        import shutil
+        from contextlib import suppress
+        from pathlib import Path
+
+        from django.conf import settings
+
+        upload_dir = Path(settings.MEDIA_ROOT) / 'uploads'
+        with suppress(OSError):
+            shutil.rmtree(upload_dir)
+
+
 class DashboardTest(TestCase):
     """后台仪表盘的统计逻辑与渲染。"""
 

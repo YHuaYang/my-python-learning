@@ -29,6 +29,27 @@ import '@toast-ui/editor/dist/i18n/zh-cn'
 const TARGET_SELECTOR = 'textarea'
 
 /**
+ * 图片上传接口地址。
+ *
+ * 与 blog/urls.py 里的 name='upload_editor_image' 对应。
+ * 不硬编码完整 URL，只用路径：域名由部署环境决定。
+ */
+const UPLOAD_ENDPOINT = '/admin-upload-image/'
+
+/**
+ * 从 cookie 里取 CSRF token。
+ *
+ * 为什么需要它：上传是 POST，Django 的 CsrfViewMiddleware
+ * 会拦没有 token 的请求。Admin 页面的表单里有
+ * {% csrf_token %} 但那是 <input>，
+ * fetch 请求需要单独放到请求头里。
+ */
+function getCsrfToken(): string {
+    const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)
+    return match ? decodeURIComponent(match[1]) : ''
+}
+
+/**
  * 找出需要增强的 textarea。
  *
  * 不能无脑增强所有 textarea：Admin 里搜索框、帮助文本
@@ -160,6 +181,75 @@ function enhance(textarea: HTMLTextAreaElement): void {
     // 所以：源码区没有选区时，直接拦掉这几个按钮，
     // 避免产生会撑死编辑器的脏数据。
     guardInlineFormatting(wrapper)
+
+    // 接管图片上传。
+    //
+    // Toast UI 默认把图片转成 base64 内联进 Markdown，
+    // 那样每张图会让正文膨胀几百 KB，存进数据库非常糟糕。
+    // 用 addImageBlobHook 换成：先上传得到 URL，再插入 ![](url)。
+    if (editor) {
+        editor.addImageBlobHook((blob, callback) => {
+            const name = blob instanceof File ? blob.name : '图片'
+            uploadImage(blob)
+                .then((url) => callback(url, name))
+                .catch((error: Error) => {
+                    console.error('[admin-editor] 图片上传失败', error)
+                    window.alert(`图片上传失败：${error.message}`)
+                })
+        })
+    }
+}
+
+/**
+ * 上传一张图片，返回可访问的 URL。
+ *
+ * 失败时抛错而不是返回空串：
+ * 调用方需要知道失败原因并告知用户，
+ * 默默失败会让用户以为图片传上去了。
+ */
+async function uploadImage(blob: Blob): Promise<string> {
+    const form = new FormData()
+    // 字段名必须与后端 request.FILES.get('image') 一致。
+    //
+    // 文件名用 instanceof File 判断：
+    // Blob 类型本身没有 name 属性，只有 File 才有（File extends Blob）。
+    // 从剪贴板粘贴得到的是 File，从其他途径可能是纯 Blob。
+    const name = blob instanceof File ? blob.name : 'pasted-image.png'
+    form.append('image', blob, name)
+
+    const response = await fetch(UPLOAD_ENDPOINT, {
+        method: 'POST',
+        body: form,
+        headers: {
+            // CSRF token 必须带，否则被中间件拦成 403
+            'X-CSRFToken': getCsrfToken(),
+        },
+        // 带上 cookie，否则 @login_required 认不出已登录
+        credentials: 'same-origin',
+    })
+
+    // 后端错误时返回的是 {error: {message}}
+    let payload: unknown = null
+    try {
+        payload = await response.json()
+    } catch {
+        // 非 JSON 响应（比如 500 页面），下面统一报错
+    }
+
+    if (!response.ok) {
+        const message =
+            (payload as { error?: { message?: string } } | null)
+                ?.error?.message
+            ?? `上传失败（HTTP ${response.status}）`
+        throw new Error(message)
+    }
+
+    // 成功响应格式：{data: {url}}
+    const url = (payload as { data?: { url?: string } } | null)?.data?.url
+    if (!url) {
+        throw new Error('服务器没有返回图片地址')
+    }
+    return url
 }
 
 /**

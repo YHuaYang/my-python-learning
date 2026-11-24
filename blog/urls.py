@@ -41,4 +41,13 @@ urlpatterns = [
     # robots.txt 必须在根路径：爬虫只认域名下的 /robots.txt，
     # 放到子目录（如 /static/robots.txt）不会被读取
     path('robots.txt', views.robots_txt, name='robots_txt'),
+
+    # 后台 Markdown 编辑器的图片上传接口。
+    # 放在 /admin/ 之外的独立路径：编辑器直接 POST 到这里。
+    # 权限由视图里的 @login_required + is_staff 双重把关。
+    path(
+        'admin-upload-image/',
+        views.upload_editor_image,
+        name='upload_editor_image',
+    ),
 ]

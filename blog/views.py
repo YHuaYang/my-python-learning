@@ -8,12 +8,17 @@ views.py 处理用户请求：查数据 → 选模板 → 返回 HTML。
 否则草稿会被直接访问到。
 筛选条件「列表里过滤了、详情里忘了过滤」是内容站最常见的越权漏洞。
 """
+import uuid
+
+from django.contrib.auth.decorators import login_required
 from django.contrib.sites.models import Site
 from django.core.cache import cache
+from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
 from django.db.models import F, Q
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from PIL import Image
 
 from .forms import GuestbookForm, SearchForm
 from .models import (
@@ -304,3 +309,127 @@ def robots_txt(request):
     # 用默认的 text/html 也能被解析，但不符合规范，
     # 部分严格的爬虫会按 HTML 处理导致解析失败
     return HttpResponse('\n'.join(lines), content_type='text/plain; charset=utf-8')
+
+
+# ===== Markdown 编辑器的图片上传接口 =====
+
+# 允许的图片类型。用 Pillow 真正解码后的格式名来判定，
+# 不看扩展名也不看客户端给的 Content-Type（两者都能伪造）。
+ALLOWED_IMAGE_FORMATS = {'JPEG', 'PNG', 'GIF', 'WEBP'}
+
+# 图片尺寸上限。
+# 防「解压炸弹」：一个几十 KB 的 PNG 解压后可能占几 GB 内存，
+# 上传时就要拦掉，不能等到 Pillow 处理时才发现。
+MAX_IMAGE_DIMENSION = 8000
+
+# 单文件大小上限。与 settings.MAX_UPLOAD_SIZE 分开：
+# 那个是通用的 20MB，图片不需要那么大
+MAX_IMAGE_SIZE = 5 * 1024 * 1024
+
+
+@login_required
+def upload_editor_image(request):
+    """接收编辑器里粘贴/选择的图片，存到 MEDIA_ROOT/uploads/，返回 URL。
+
+    响应格式按 Toast UI 的约定：成功返回 {data: {url: ...}}，
+    失败返回 {error: {message: ...}}，HTTP 状态码也要对应。
+
+    安全措施（每一条都是必需的，缺一条就是个洞）：
+    1. @login_required：未登录不能传。单靠这个还不够，
+       还要 is_staff 检查，否则普通用户账号也能传
+    2. 只接受 POST：GET 不应该能写数据
+    3. 大小限制：先看 Content-Length，再看实际读到的字节数
+    4. 用 Pillow 真正解码验证是图片，不信任扩展名与
+       客户端给的 Content-Type
+    5. 限制尺寸，防解压炸弹
+    6. 不存 SVG：SVG 是文本，可内嵌 <script>，浏览器会执行
+    7. 文件名重新生成，不用用户提供的名字，
+       避开路径穿越与非法字符
+    """
+    # 第 1 层：登录与权限
+    if not request.user.is_staff:
+        return JsonResponse(
+            {'error': {'message': '无权限'}}, status=403,
+        )
+
+    # 第 2 层：只接受 POST
+    if request.method != 'POST':
+        return JsonResponse(
+            {'error': {'message': '只支持 POST'}}, status=405,
+        )
+
+    uploaded = request.FILES.get('image')
+    if not uploaded:
+        return JsonResponse(
+            {'error': {'message': '没有收到文件'}}, status=400,
+        )
+
+    # 第 3 层：大小限制
+    if uploaded.size > MAX_IMAGE_SIZE:
+        return JsonResponse(
+            {
+                'error': {
+                    'message': f'图片不能超过 {MAX_IMAGE_SIZE // 1024 // 1024}MB',
+                },
+            },
+            status=400,
+        )
+
+    # 第 4、5、6 层：真解码、查格式、查尺寸
+    # Image.open 只读文件头，配 verify() 才能确认文件完整且真的是图片。
+    # 注意 verify() 之后对象不可再用，所以先 verify 再重新 open 读尺寸
+    try:
+        with Image.open(uploaded) as img:
+            img.verify()
+    except Exception:
+        return JsonResponse(
+            {'error': {'message': '不是有效的图片文件'}}, status=400,
+        )
+
+    # verify() 会消耗流，必须重置指针才能再次读取
+    uploaded.seek(0)
+    try:
+        with Image.open(uploaded) as img:
+            image_format = img.format
+            width, height = img.size
+    except Exception:
+        return JsonResponse(
+            {'error': {'message': '图片解析失败'}}, status=400,
+        )
+
+    if image_format not in ALLOWED_IMAGE_FORMATS:
+        return JsonResponse(
+            {
+                'error': {
+                    'message': f'不支持的格式：{image_format}。'
+                               '只允许 JPG / PNG / GIF / WebP',
+                },
+            },
+            status=400,
+        )
+
+    if width > MAX_IMAGE_DIMENSION or height > MAX_IMAGE_DIMENSION:
+        return JsonResponse(
+            {
+                'error': {
+                    'message': f'图片尺寸过大（{width}x{height}），'
+                               f'单边不能超过 {MAX_IMAGE_DIMENSION}px',
+                },
+            },
+            status=400,
+        )
+
+    # 第 7 层：文件名重新生成。
+    # 用 uuid + 正确扩展名，完全不用用户给的文件名：
+    # 用户文件名为「../../etc/passwd」或「a b/c.png」都不影响我们
+    uploaded.seek(0)
+    ext = (image_format or 'PNG').lower()
+    if ext == 'jpeg':
+        ext = 'jpg'
+    filename = f'{uuid.uuid4().hex}.{ext}'
+
+    stored_name = default_storage.save(f'uploads/{filename}', uploaded)
+    url = default_storage.url(stored_name)
+
+    # Toast UI 约定的成功响应格式
+    return JsonResponse({'data': {'url': url}})
