@@ -8,6 +8,7 @@ import logging
 
 from django.contrib import admin, messages
 from django.templatetags.static import static
+from django.utils.functional import lazy
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin as UnfoldModelAdmin
 
@@ -63,10 +64,20 @@ class MarkdownEditorMixin(UnfoldModelAdmin):
         #
         # Django 会自动去重：同一页多个 Admin 声明相同资源
         # 也只输出一次。
+        #
+        # 为什么用 lazy() 而不是直接 static()：
+        # Media 是类属性，模块导入时就会求值。
+        # 而 DEBUG=False 时 staticfiles_storage 是
+        # CompressedManifestStaticFilesStorage，它要求
+        # staticfiles.json 里已有对应记录。
+        # 结果是：跑 collectstatic 时加载 admin.py → 调 static()
+        # → 找不到 manifest → ValueError，collectstatic 自己都跑不起来。
+        #
+        # lazy() 把求值推迟到真正渲染页面时，那时 manifest 已生成。
         css = {
-            'all': (static('js/asset-admin-editor.css'),),
+            'all': (lazy(static, str)('js/asset-admin-editor.css'),),
         }
-        js = (static('js/admin-editor.js'),)
+        js = (lazy(static, str)('js/admin-editor.js'),)
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)

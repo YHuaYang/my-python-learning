@@ -1,0 +1,44 @@
+[Unit]
+Description=mysite Django application (Gunicorn)
+# network.target：等网络就绪后再启动。
+# 不需要 network-online.target：Django 启动时不依赖外部网络。
+After=network.target
+
+[Service]
+# 用专门的非 root 用户运行。root 运行 Web 服务是重大安全风险：
+# 一旦应用被攻破，攻击者直接拿到系统最高权限。
+User=www-data
+Group=www-data
+
+# 工作目录（与 gunicorn.conf.py 里的 chdir 一致）
+WorkingDirectory=/var/www/mysite
+
+# 启动命令。用 exec 形式而不是 shell 形式：
+# 让 systemd 直接管理 gunicorn 进程，信号能正确传递，
+# 停止服务时能优雅退出而不是被强杀。
+ExecStart=/var/www/mysite/venv/bin/gunicorn \
+    --config /var/www/mysite/deploy/gunicorn.conf.py \
+    mysite.wsgi:application
+
+# systemd 重启策略：
+#   always  —— 无论怎么退出都重启
+#   5       —— 等 5 秒再重启（避免崩溃循环刷日志）
+Restart=always
+RestartSec=5
+
+# 优雅停止：先发 SIGTERM，等 30 秒仍在运行则 SIGKILL
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# 安全加固
+# 禁止提权：进程无法通过 setuid 变成其他用户
+NoNewPrivileges=true
+# /tmp 私有化：其他进程看不到本服务的临时文件
+PrivateTmp=true
+# /home、/root、/boot 只读，防止被写入
+ProtectHome=true
+ProtectSystem=full
+
+[Install]
+# 开机自启：enable 后会创建这个依赖链接
+WantedBy=multi-user.target

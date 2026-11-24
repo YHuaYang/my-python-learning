@@ -10,3 +10,6 @@ nh3>=0.3
 # Admin 主题。必须在 INSTALLED_APPS 里排在 django.contrib.admin 之前
 # 才会生效（它靠覆盖 admin 的模板与静态文件工作）
 django-unfold>=0.110
+# WSGI 服务器。只用 runserver 上生产是不行的：
+# 它是单进程开发服务器，无并发处理、无进程管理、不安全
+gunicorn>=21.0
