@@ -37,7 +37,13 @@ NoNewPrivileges=true
 PrivateTmp=true
 # /home、/root、/boot 只读，防止被写入
 ProtectHome=true
+# /usr、/boot、/etc 只读。/var 不受影响，所以 /var/www 仍可写。
 ProtectSystem=full
+
+# 显式声明哪些路径可写。不是必需（full 不限制 /var），
+# 但写出来让意图清楚，以后改成 strict 也不会意外弄坏。
+# db.sqlite3 所在目录必须可写：SQLite 要在那里建 -journal 临时文件。
+ReadWritePaths=/var/www/mysite
 
 [Install]
 # 开机自启：enable 后会创建这个依赖链接

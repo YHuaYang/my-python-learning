@@ -338,13 +338,44 @@ sudo journalctl -u mysite -n 50 --no-pager
 
 ### 8.3 设文件权限
 
-`www-data` 用户需要能写数据库和 media：
+这一步弄错会报 `attempt to write a readonly database`，原因不直观：
+
+**SQLite 不只是写 `db.sqlite3`，它还在同一目录下创建临时文件**
+（`-journal`、`-wal`、`-shm`）。所以 `www-data` 必须能**在项目目录里新建文件**，
+仅仅能给数据库文件写权限是不够的。
 
 ```bash
 cd /var/www/mysite
+
+# 数据库文件与 media 归 www-data
 sudo chown www-data:www-data db.sqlite3
 sudo chown -R www-data:www-data media
-sudo chmod 755 /var/www/mysite
+
+# 目录本身也要可写（创建 journal 文件用）
+# 775 = 属主 rwx，同组 rwx，其他 r-x
+sudo chown www-data:www-data /var/www/mysite
+sudo chmod 775 /var/www/mysite
+```
+
+**注意后续影响**：目录属主变成 `www-data` 后，`ubuntu` 用户就改不了它了，
+`git pull` 会报权限错误。两个解法：
+
+```bash
+# 解法一：git 操作以 www-data 身份执行
+sudo -u www-data git pull
+
+# 解法二：把 ubuntu 加进 www-data 组（需重新登录才生效）
+sudo usermod -aG www-data ubuntu
+```
+
+验证权限是否够：
+
+```bash
+ls -ld /var/www/mysite
+# 应该看到 drwxrwxr-x www-data www-data
+
+# 直接测能不能写
+sudo -u www-data touch /var/www/mysite/_writetest && sudo rm /var/www/mysite/_writetest && echo "可写"
 ```
 
 ### 8.4 测试 Gunicorn 能响应

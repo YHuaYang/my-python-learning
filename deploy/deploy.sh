@@ -54,12 +54,18 @@ echo "==> 6. 数据库迁移"
 "$VENV_DIR/bin/python" manage.py migrate --noinput
 
 echo "==> 7. 设置文件权限"
-# www-data 需要读代码、写 media 和 db.sqlite3
+# SQLite 不只是写 db.sqlite3，它还在同目录下创建 -journal / -wal / -shm
+# 临时文件。所以 www-data 必须能在项目目录里新建文件，
+# 只给数据库文件写权限不够 —— 否则报
+# attempt to write a readonly database。
 chown -R www-data:www-data "$PROJECT_DIR/media" || true
 chown www-data:www-data "$PROJECT_DIR/db.sqlite3" || true
-# 代码目录只需读权限，不要给写权限：
-# 如果应用被攻破，攻击者改不了代码
+
+# 代码文件保持 644/755（应用不能改写自己的代码），
+# 但项目目录本身必须可写，才能落 journal 文件
 chmod -R 755 "$PROJECT_DIR"
+chown www-data:www-data "$PROJECT_DIR"
+chmod 775 "$PROJECT_DIR"
 
 echo "==> 8. 安装 systemd 服务"
 cp "$PROJECT_DIR/deploy/mysite.service" "/etc/systemd/system/$SERVICE_NAME.service"
