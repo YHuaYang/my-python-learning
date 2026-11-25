@@ -53,3 +53,7 @@ blog/static/js/chunk-*.js
 # 以后新增入口时又忘加一条：凡是构建出的 js 与 asset-*.css 都不入库
 blog/static/js/admin-editor.js
 blog/static/js/asset-*.css
+
+# 部署时临时归拢的构建产物（deploy/collect-assets.sh 的产出），
+# 只用于 scp 上传，不进版本库
+/upload/

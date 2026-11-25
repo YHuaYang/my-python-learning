@@ -204,7 +204,7 @@ sudo certbot renew --dry-run
 
 ### 8.1 改 Site 域名
 
-```
+```text
 /admin/sites/site/1/change/
 ```
 
@@ -215,7 +215,7 @@ sudo certbot renew --dry-run
 
 ### 8.2 填个人资料
 
-```
+```text
 /admin/blog/profile/1/change/
 ```
 
@@ -266,50 +266,46 @@ cd /var/www/mysite
 sudo ./deploy/update.sh
 ```
 
-如果改了前端（TSX / CSS），**本地必须先 build**：
+如果改了前端（TSX / CSS），**构建产物不会进 git**，
+必须单独 scp 上去。完整步骤见 `deploy/STEP-BY-STEP.md` 第十三节。
+
+简述：
 
 ```powershell
+# 本地
 cd D:\learning\Django
 npm run build
-git add -A
-git commit -m "..."
-git push
+git add -A; git commit -m "..."; git push
+ssh ubuntu@你的IP "mkdir -p /tmp/assets"
+scp upload\* ubuntu@你的IP:/tmp/assets/
 ```
 
-服务器的 `collectstatic` 只是把已有产物复制到 `static/`，
-不会运行 `npm run build`（服务器没有 Node 环境）。
+```bash
+# 服务器
+cd /var/www/mysite
+git pull
+sudo ./deploy/install-assets.sh /tmp/assets
+venv/bin/python manage.py collectstatic --noinput
+sudo systemctl restart mysite
+```
+
+**关键**：`tailwind.css`、`bundle.js`、`admin-editor.js`
+被 `.gitignore` 排除（它们是构建产物，不进版本库）。
+所以 `git pull` 拿不到它们——不 scp 的话网站会**没样式**。
+
+服务器的 `collectstatic` 只是把已有产物复制到 `static/`。
 
 ---
 
 ## 十一、未备案临时方案
 
-如果暂时用 IP 访问，把 Nginx 配置简化：
+如果暂时用 IP 访问，直接用现成的 `deploy/nginx-ip.conf`：
 
-```nginx
-server {
-    listen 80;
-    server_name _;
-
-    client_max_body_size 20M;
-
-    location /static/ {
-        alias /var/www/mysite/static/;
-        expires 1y;
-    }
-
-    location /media/ {
-        alias /var/www/mysite/media/;
-        expires 7d;
-    }
-
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
+```bash
+sudo cp deploy/nginx-ip.conf /etc/nginx/sites-available/mysite
+sudo ln -sf /etc/nginx/sites-available/mysite /etc/nginx/sites-enabled/mysite
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
 `.env` 里 `ALLOWED_HOSTS` 填服务器 IP，`USE_HTTPS=False`。
