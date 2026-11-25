@@ -322,6 +322,15 @@ class Profile(models.Model):
     tagline = models.CharField(
         max_length=120, blank=True, default='', verbose_name='一句话介绍',
     )
+    # 「关于我」页的正文。用 TextField + Markdown 而不是 CharField：
+    # 简介通常要分段、加列表、放链接，纯文本表达不了。
+    # 存源文本、渲染时再转换，这样后台能编辑，不用改模板重新部署
+    bio = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='个人简介',
+        help_text='支持 Markdown，显示在「关于我」页面',
+    )
     email = models.EmailField(blank=True, default='', verbose_name='邮箱')
     github_url = models.URLField(
         blank=True, default='', verbose_name='GitHub 地址',

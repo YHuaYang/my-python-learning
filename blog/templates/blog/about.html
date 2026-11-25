@@ -1,4 +1,5 @@
 {% extends "blog/base.html" %}
+{% load markdownify %}
 {% block title %}关于我 - 多于点线圈 blog{% endblock %}
 {% block content %}
     <div class="glass max-w-3xl p-6">
@@ -19,9 +20,11 @@
             </div>
         {% endif %}
 
-        <div class="mt-6 space-y-2 leading-loose text-neutral-700 dark:text-neutral-300">
-            <p>我是一名网工专业的学生。</p>
-        </div>
+        {% if profile.bio %}
+            <div class="prose-bio mt-6 leading-loose text-neutral-700 dark:text-neutral-300">
+                {{ profile.bio|markdownify }}
+            </div>
+        {% endif %}
 
         {% if profile.email or profile.github_url or profile.social_links %}
             <div class="mt-8 border-t border-neutral-300/60 pt-6 dark:border-neutral-600/60">

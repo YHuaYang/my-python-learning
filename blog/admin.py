@@ -284,12 +284,18 @@ class ProjectAdmin(MarkdownEditorMixin):
 
 
 @admin.register(Profile)
-class ProfileAdmin(UnfoldModelAdmin):
+class ProfileAdmin(MarkdownEditorMixin):
     list_display = ('nickname', 'avatar_preview', 'tagline', 'email', 'updated_date')
+    # bio 要挂 Toast UI 编辑器；其余字段是普通输入框
+    markdown_fields = ('bio',)
     # 单例模型，只有一条记录，不需要搜索和筛选
     fieldsets = (
         ('基本信息', {
             'fields': ('nickname', 'tagline'),
+        }),
+        ('个人简介', {
+            'fields': ('bio',),
+            'description': '支持 Markdown，显示在「关于我」页面',
         }),
         ('头像', {
             'fields': ('avatar', 'avatar_preview_large', 'avatar_url'),
