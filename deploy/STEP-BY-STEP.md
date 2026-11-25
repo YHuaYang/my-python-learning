@@ -197,7 +197,22 @@ USE_HTTPS=False
 
 **为什么 `USE_HTTPS=False`**：现在还没证书。有证书后再改 `True` 并重启。
 
-**为什么 `ALLOWED_HOSTS` 要含 IP**：未备案期间用 IP 访问，不填会返回 400。
+**为什么 `DEBUG=False` 必须改**：`.env.example` 里默认是 `True`，
+忘了改会带来两个后果：
+
+| 后果 | 说明 |
+| --- | --- |
+| 泄露源码与配置 | 报错页会显示完整堆栈、`SECRET_KEY`、数据库路径 |
+| 静态文件不走 manifest | 缓存策略失效，且与生产行为不一致 |
+
+**改完 `DEBUG=False` 必须重跑 `collectstatic`**：
+storage 会切换到 `CompressedManifestStaticFilesStorage`，
+要重新生成 `staticfiles.json`。不重跑的话所有静态文件会 500。
+
+**为什么 `ALLOWED_HOSTS` 要同时含 IP 和回环地址**：
+`DEBUG=False` 下 Django 严格校验 Host 头。只写公网 IP 的话，
+服务器上用 `curl http://127.0.0.1/` 测试会全返回 400，
+Nginx 健康检查也会失败。实测踩过这个坑。
 
 ### 5.1 验证配置能读
 

@@ -55,3 +55,11 @@ proc_name = 'mysite'
 
 # 启动前切换到这个目录（保证相对路径正确）
 chdir = '/var/www/mysite'
+
+
+# Gunicorn 27 新增的 ControlSocket 功能（可用 gunicornc 命令行
+# 连到运行中的实例查状态/改 worker 数）。默认路径是 $HOME/.gunicorn/，
+# 而 www-data 的 home 是 /var/www，该目录不可写，于是每次启动都
+# 刷一条 "Control server error: Permission denied"。
+# 我们不用这个功能，直接关掉，日志就干净了。
+control_socket_disable = True
