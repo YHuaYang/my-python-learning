@@ -338,45 +338,60 @@ sudo journalctl -u mysite -n 50 --no-pager
 
 ### 8.3 设文件权限
 
-这一步弄错会报 `attempt to write a readonly database`，原因不直观：
+这一步最容易反复出错。有两个用户都要写，需求不同：
 
-**SQLite 不只是写 `db.sqlite3`，它还在同一目录下创建临时文件**
-（`-journal`、`-wal`、`-shm`）。所以 `www-data` 必须能**在项目目录里新建文件**，
-仅仅能给数据库文件写权限是不够的。
+| 用户 | 要写什么 | 为什么 |
+| --- | --- | --- |
+| `www-data`（应用） | 项目目录（建 `-journal`）、`db.sqlite3`、`media/` | SQLite 不只需要写数据库文件，还会**在同一目录下**建临时文件（`-journal`/`-wal`/`-shm`）；上传的图片写 `media/` |
+| `ubuntu`（你） | 项目目录（建 `static/`）、改代码、`git pull` | `collectstatic` 要建 `static/` |
 
-```bash
-cd /var/www/mysite
+**不要用 `chown www-data:www-data 整个目录`**，那会让 `ubuntu` 失去写权限，
+`collectstatic` 直接 `PermissionError: '/var/www/mysite/static'`。
 
-# 数据库文件与 media 归 www-data
-sudo chown www-data:www-data db.sqlite3
-sudo chown -R www-data:www-data media
-
-# 目录本身也要可写（创建 journal 文件用）
-# 775 = 属主 rwx，同组 rwx，其他 r-x
-sudo chown www-data:www-data /var/www/mysite
-sudo chmod 775 /var/www/mysite
-```
-
-**注意后续影响**：目录属主变成 `www-data` 后，`ubuntu` 用户就改不了它了，
-`git pull` 会报权限错误。两个解法：
+正确做法是**组共享**：属主给 `ubuntu`，属组给 `www-data`，组权限带写。
 
 ```bash
-# 解法一：git 操作以 www-data 身份执行
-sudo -u www-data git pull
+cd /var/www
 
-# 解法二：把 ubuntu 加进 www-data 组（需重新登录才生效）
-sudo usermod -aG www-data ubuntu
+# -R 递归改属主与属组
+sudo chown -R ubuntu:www-data mysite
+
+# g+w 只给组加写权限，保留原有执行位
+# （不用 chmod -R 777，那太宽，也不用 chmod -R 755，那会把
+#   脚本的执行位和已有权限一起改掉）
+sudo chmod -R g+w mysite
 ```
 
-验证权限是否够：
+验证：
 
 ```bash
 ls -ld /var/www/mysite
-# 应该看到 drwxrwxr-x www-data www-data
-
-# 直接测能不能写
-sudo -u www-data touch /var/www/mysite/_writetest && sudo rm /var/www/mysite/_writetest && echo "可写"
+ls -l /var/www/mysite/db.sqlite3
 ```
+
+应该是：
+
+```text
+drwxrwxr-x 12 ubuntu www-data 4096 ... /var/www/mysite
+-rw-rw-r--  1 ubuntu www-data ...      db.sqlite3
+```
+
+关键看两点：属组是 `www-data`，且组权限里有 `w`。
+
+两个用户各测一次：
+
+```bash
+# 你（ubuntu）能建 static 目录
+cd /var/www/mysite && mkdir -p static && echo "ubuntu 可写"
+
+# www-data 能建 journal 文件
+sudo -u www-data touch /var/www/mysite/_t && sudo rm /var/www/mysite/_t && echo "www-data 可写"
+```
+
+两条都打印出来才算对。
+
+**如果已经误设成 `chown www-data:www-data`**：不需要撤销，直接跑上面的
+`chown -R ubuntu:www-data` + `chmod -R g+w` 覆盖即可。
 
 ### 8.4 测试 Gunicorn 能响应
 

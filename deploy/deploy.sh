@@ -54,18 +54,22 @@ echo "==> 6. 数据库迁移"
 "$VENV_DIR/bin/python" manage.py migrate --noinput
 
 echo "==> 7. 设置文件权限"
-# SQLite 不只是写 db.sqlite3，它还在同目录下创建 -journal / -wal / -shm
-# 临时文件。所以 www-data 必须能在项目目录里新建文件，
-# 只给数据库文件写权限不够 —— 否则报
-# attempt to write a readonly database。
-chown -R www-data:www-data "$PROJECT_DIR/media" || true
-chown www-data:www-data "$PROJECT_DIR/db.sqlite3" || true
+# 有两个用户都要写，需求不同：
+#   www-data —— SQLite 要在项目目录建 -journal 临时文件，
+#              还要写 media/（否则报 readonly database）
+#   ubuntu   —— collectstatic 要建 static/，还要 git pull 与改代码
+#
+# 关键是不要独占：属主给 ubuntu，属组给 www-data，
+# 组权限带 w。两者都靠组权限获得写权。
+DEPLOY_USER="${SUDO_USER:-ubuntu}"
+chown -R "$DEPLOY_USER":www-data "$PROJECT_DIR"
+# g+w 只给组加写权限，保留原有执行位。
+# 不用 chmod -R 777（太宽），也不用 -R 755（会抹掉已有权限）
+chmod -R g+w "$PROJECT_DIR"
 
-# 代码文件保持 644/755（应用不能改写自己的代码），
-# 但项目目录本身必须可写，才能落 journal 文件
-chmod -R 755 "$PROJECT_DIR"
-chown www-data:www-data "$PROJECT_DIR"
-chmod 775 "$PROJECT_DIR"
+# media 必须可写（用户上传图片的落地处）
+chown -R www-data:www-data "$PROJECT_DIR/media" 2>/dev/null || true
+chmod -R g+w "$PROJECT_DIR/media" 2>/dev/null || true
 
 echo "==> 8. 安装 systemd 服务"
 cp "$PROJECT_DIR/deploy/mysite.service" "/etc/systemd/system/$SERVICE_NAME.service"
